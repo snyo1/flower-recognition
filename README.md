@@ -168,14 +168,14 @@ DELETE /api/knowledge/{flower_id}
 ```bash
 cd flower-recognition-frontend
 npm install
-npm dev --port 5000 --host
+npm run dev
 ```
 
 ### 后端启动
 ```bash
 cd flower-recognition-backend
 pip install -r requirements.txt
-python -m uvicorn main:app --host 0.0.0.0 --port 8000
+python -m uvicorn main:app 
 ```
 
 ## 环境变量
@@ -191,7 +191,7 @@ DATABASE_URL=postgresql://user:password@localhost/dbname
 
 ### 前端开发
 1. 修改代码后，Vite 会自动热更新
-2. 访问 http://localhost:5000 查看前端页面
+2. 访问 http://localhost:5173 查看前端页面
 
 ### 后端开发
 1. 修改代码后，需要重启后端服务
@@ -211,7 +211,7 @@ DATABASE_URL=postgresql://user:password@localhost/dbname
 ## 注意事项
 
 1. 当前版本使用模拟数据，大模型集成需要配置相应的API Key
-2. 前端运行在 5000 端口，后端运行在 8000 端口
+2. 前端运行在 5173 端口，后端运行在 8000 端口
 3. 已配置CORS，支持跨域请求
 4. 使用Element Plus组件库，确保样式正确加载
 
