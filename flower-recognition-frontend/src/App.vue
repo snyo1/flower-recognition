@@ -2,7 +2,7 @@
   <el-container class="app-container">
     <el-header class="app-header">
       <div class="header-content">
-        <h1 class="app-title">🌸 智能花卉识别与科普系统</h1>
+        <h1 class="app-title">🌸 花世界</h1>
         <el-menu
           :default-active="activeMenu"
           mode="horizontal"
