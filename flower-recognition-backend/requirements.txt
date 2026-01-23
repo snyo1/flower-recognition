@@ -7,5 +7,8 @@ python-dotenv==1.0.0
 sqlalchemy==2.0.36
 psycopg2-binary==2.9.11
 pymysql==1.1.1
+<<<<<<< HEAD
 langchain==1.1.0
 langchain-deepseek==1.0.1
+=======
+>>>>>>> 12fb5321236fa440523d54ade32d4cf8bef32c12
