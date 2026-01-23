@@ -1,20 +1,18 @@
 from fastapi import APIRouter, HTTPException
 from ..models.schemas import QARequest, QAResponse
+from ..services.ai import generate_text
 
 router = APIRouter(prefix="/api/qa", tags=["智能问答"])
 
 @router.post("/chat", response_model=QAResponse)
 async def chat(request: QARequest):
-    """
-    智能问答接口
-    接收用户问题，返回AI回答
-    """
     try:
+        prompt = f"请围绕花卉主题回答：{request.question}"
+        ai = generate_text(prompt)
+        if ai:
+            return QAResponse(answer=ai)
         question = request.question.lower()
         answer = ""
-
-        # TODO: 调用大模型API生成回答
-        # 这里使用基于规则的模拟回答
         if '浇水' in question or '水' in question:
             answer = "浇水要根据土壤干湿情况来决定。通常土壤表面干燥时再浇水，浇水要浇透，但要避免积水。夏季需要增加浇水频率，冬季则要减少。不同花卉的需水量不同，建议先了解具体花卉的习性。"
         elif '土壤' in question:
@@ -28,9 +26,7 @@ async def chat(request: QARequest):
         elif '施肥' in question:
             answer = "施肥要遵循'薄肥勤施'的原则。生长期（春季到秋季）可每月施肥1-2次，冬季休眠期停止施肥。选择合适的肥料类型：观叶植物用氮肥为主的复合肥，观花植物在花期前增加磷钾肥。浓度要稀薄，避免烧伤根系。"
         else:
-            answer = f"感谢您的提问！关于'{request.question}'，这是一个很好的问题。关于花卉养护，建议您根据具体的花卉品种来制定养护方案。如果您能告诉我您关注的花卉名称，我可以为您提供更详细的建议。"
-
+            answer = f"感谢您的提问！关于'{request.question}'，这是一个很好的问题。关于花卉养护，建议您根据具体的花卉品种来制定养护方案。"
         return QAResponse(answer=answer)
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"问答失败: {str(e)}")
