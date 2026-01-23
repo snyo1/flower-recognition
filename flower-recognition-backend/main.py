@@ -5,6 +5,9 @@ from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 import os
 from app.api import flower, qa, knowledge
+from app.services.seed import seed_flowers
+from app.services.db import SessionLocal
+from app.models.tables import Flower
 
 load_dotenv()
 
@@ -23,6 +26,16 @@ app.add_middleware(
 app.include_router(flower.router)
 app.include_router(qa.router)
 app.include_router(knowledge.router)
+
+@app.on_event("startup")
+def ensure_seed_data():
+    s = SessionLocal()
+    try:
+        count = s.query(Flower).count()
+        if count == 0:
+            seed_flowers()
+    finally:
+        s.close()
 
 # 挂载前端静态文件
 frontend_path = os.path.join(os.path.dirname(__file__), "../flower-recognition-frontend/dist")
