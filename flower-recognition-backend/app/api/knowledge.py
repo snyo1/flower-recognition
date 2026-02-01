@@ -1,21 +1,22 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import SQLAlchemyError
 from ..models.schemas import FlowerKnowledge, FlowerKnowledgeList
 from ..models.tables import Flower
-from ..services.db import SessionLocal
+from ..services.db import get_db
 
 router = APIRouter(prefix="/api/knowledge", tags=["知识库"])
 
 @router.get("/", response_model=FlowerKnowledgeList)
-async def get_all_knowledge(keyword: str = ""):
-    session = SessionLocal()
+async def get_all_knowledge(keyword: str = "", db: AsyncSession = Depends(get_db)):
     try:
         q = select(Flower)
         if keyword:
             kw = f"%{keyword}%"
             q = q.filter((Flower.name.like(kw)) | (Flower.family.like(kw)) | (Flower.description.like(kw)))
-        rows = session.execute(q).scalars().all()
+        result = await db.execute(q)
+        rows = result.scalars().all()
         flowers = [
             FlowerKnowledge(
                 name=row.name,
@@ -31,12 +32,9 @@ async def get_all_knowledge(keyword: str = ""):
         return FlowerKnowledgeList(flowers=flowers)
     except SQLAlchemyError:
         return FlowerKnowledgeList(flowers=[])
-    finally:
-        session.close()
 
 @router.post("/", response_model=FlowerKnowledge)
-async def create_flower(flower: FlowerKnowledge):
-    session = SessionLocal()
+async def create_flower(flower: FlowerKnowledge, db: AsyncSession = Depends(get_db)):
     try:
         row = Flower(
             name=flower.name,
@@ -47,20 +45,17 @@ async def create_flower(flower: FlowerKnowledge):
             care_guide=flower.careGuide,
             flower_language=flower.flowerLanguage,
         )
-        session.add(row)
-        session.commit()
+        db.add(row)
+        await db.commit()
         return flower
     except SQLAlchemyError:
-        session.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="数据库错误")
-    finally:
-        session.close()
 
 @router.put("/{flower_id}", response_model=FlowerKnowledge)
-async def update_flower(flower_id: int, flower: FlowerKnowledge):
-    session = SessionLocal()
+async def update_flower(flower_id: int, flower: FlowerKnowledge, db: AsyncSession = Depends(get_db)):
     try:
-        row = session.get(Flower, flower_id)
+        row = await db.get(Flower, flower_id)
         if not row:
             raise HTTPException(status_code=404, detail="花卉知识不存在")
         row.name = flower.name
@@ -70,26 +65,21 @@ async def update_flower(flower_id: int, flower: FlowerKnowledge):
         row.description = flower.description
         row.care_guide = flower.careGuide
         row.flower_language = flower.flowerLanguage
-        session.commit()
+        await db.commit()
         return flower
     except SQLAlchemyError:
-        session.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="数据库错误")
-    finally:
-        session.close()
 
 @router.delete("/{flower_id}")
-async def delete_flower(flower_id: int):
-    session = SessionLocal()
+async def delete_flower(flower_id: int, db: AsyncSession = Depends(get_db)):
     try:
-        row = session.get(Flower, flower_id)
+        row = await db.get(Flower, flower_id)
         if not row:
             raise HTTPException(status_code=404, detail="花卉知识不存在")
-        session.delete(row)
-        session.commit()
+        await db.delete(row)
+        await db.commit()
         return {"message": "删除成功"}
     except SQLAlchemyError:
-        session.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="数据库错误")
-    finally:
-        session.close()

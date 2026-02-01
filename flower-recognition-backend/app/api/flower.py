@@ -1,18 +1,19 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from ..models.schemas import FlowerIdentification
 from ..services.ai import identify_and_generate
-from ..services.db import SessionLocal
+from ..services.db import get_db
 from ..models.tables import Flower, RecognitionRecord
 
 router = APIRouter(prefix="/api/flower", tags=["花卉识别"])
 
 @router.post("/identify", response_model=FlowerIdentification)
-async def identify_flower(file: UploadFile = File(...)):
+async def identify_flower(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="只支持图片文件")
     try:
         image_data = await file.read()
-        session = SessionLocal()
         try:
             ai_result = identify_and_generate("花卉图片")
             if not ai_result:
@@ -26,7 +27,10 @@ async def identify_flower(file: UploadFile = File(...)):
                     "flowerLanguage": "月季花寓意纯洁的爱、热情和祝福，是爱情与美丽的象征。",
                     "confidence": 95.5
                 }
-            existing = session.query(Flower).filter(Flower.name == ai_result["name"]).first()
+            
+            result = await db.execute(select(Flower).filter(Flower.name == ai_result["name"]))
+            existing = result.scalars().first()
+
             if not existing:
                 f = Flower(
                     name=ai_result["name"],
@@ -37,8 +41,8 @@ async def identify_flower(file: UploadFile = File(...)):
                     care_guide=ai_result["careGuide"],
                     flower_language=ai_result["flowerLanguage"],
                 )
-                session.add(f)
-                session.flush()
+                db.add(f)
+                await db.flush()
                 plant_id = f.id
             else:
                 plant_id = existing.id
@@ -48,13 +52,11 @@ async def identify_flower(file: UploadFile = File(...)):
                 user_id=None,
                 confidence=ai_result.get("confidence", 90.0)
             )
-            session.add(rec)
-            session.commit()
+            db.add(rec)
+            await db.commit()
             return ai_result
         except Exception:
-            session.rollback()
+            await db.rollback()
             raise
-        finally:
-            session.close()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"识别失败: {str(e)}")

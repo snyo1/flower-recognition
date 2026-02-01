@@ -1,7 +1,10 @@
-from app.services.db import SessionLocal
-from app.models.tables import Flower
+import asyncio
+from sqlalchemy import select
+from app.services.db import AsyncSessionFactory
+from app.models.tables import Flower, User
+from app.core.security import get_password_hash
 
-def seed_flowers():
+async def seed_flowers():
     data = [
         {
             "name": "月季",
@@ -58,10 +61,11 @@ def seed_flowers():
             "flower_language": "象征高贵、典雅、爱情和祝福。"
         }
     ]
-    s = SessionLocal()
-    try:
+    
+    async with AsyncSessionFactory() as session:
         for d in data:
-            exists = s.query(Flower).filter(Flower.name == d["name"]).first()
+            result = await session.execute(select(Flower).filter(Flower.name == d["name"]))
+            exists = result.scalars().first()
             if exists:
                 continue
             row = Flower(
@@ -73,10 +77,31 @@ def seed_flowers():
                 care_guide=d["care_guide"],
                 flower_language=d["flower_language"],
             )
-            s.add(row)
-        s.commit()
-    finally:
-        s.close()
+            session.add(row)
+        await session.commit()
+        print("Flowers seeded.")
+
+async def seed_admin():
+    async with AsyncSessionFactory() as session:
+        result = await session.execute(select(User).filter(User.username == "admin"))
+        exists = result.scalars().first()
+        if exists:
+            print("Admin user already exists.")
+            return
+        
+        admin_user = User(
+            username="admin",
+            email="admin@huashijie.com",
+            password_hash=get_password_hash("123456"),
+            role="admin"
+        )
+        session.add(admin_user)
+        await session.commit()
+        print("Admin user seeded.")
+
+async def main():
+    await seed_flowers()
+    await seed_admin()
 
 if __name__ == "__main__":
-    seed_flowers()
+    asyncio.run(main())

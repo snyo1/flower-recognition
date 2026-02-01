@@ -1,35 +1,97 @@
-from sqlalchemy import Column, BigInteger, String, Text, DateTime, DECIMAL, ForeignKey, func
-from sqlalchemy.orm import declarative_base, relationship
+from typing import List, Optional
+from datetime import datetime
+from sqlalchemy import BigInteger, String, Text, DateTime, DECIMAL, ForeignKey, func, Enum
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-Base = declarative_base()
+class Base(DeclarativeBase):
+    pass
 
 class User(Base):
     __tablename__ = "users"
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
-    username = Column(String(64), unique=True, nullable=False)
-    email = Column(String(128))
-    registration_date = Column(DateTime, server_default=func.now())
+    
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    username: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(256), nullable=False, default="")
+    email: Mapped[Optional[str]] = mapped_column(String(128), unique=True, index=True)
+    role: Mapped[str] = mapped_column(Enum("user", "expert", "admin"), default="user")
+    registration_date: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    recognitions: Mapped[List["RecognitionRecord"]] = relationship(back_populates="user")
+    comments: Mapped[List["Comment"]] = relationship(back_populates="user")
+    feedbacks: Mapped[List["Feedback"]] = relationship(back_populates="user")
+    expert_application: Mapped[Optional["ExpertApplication"]] = relationship(back_populates="user", uselist=False)
 
 class Flower(Base):
     __tablename__ = "flowers"
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
-    name = Column(String(128), unique=True, nullable=False)
-    family = Column(String(128), nullable=False)
-    color = Column(String(256), nullable=False)
-    blooming_period = Column(String(128), nullable=False)
-    description = Column(Text, nullable=False)
-    care_guide = Column(Text, nullable=False)
-    flower_language = Column(Text, nullable=False)
-    created_at = Column(DateTime, server_default=func.now())
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
+    family: Mapped[str] = mapped_column(String(128), nullable=False)
+    color: Mapped[str] = mapped_column(String(256), nullable=False)
+    blooming_period: Mapped[str] = mapped_column(String(128), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    care_guide: Mapped[str] = mapped_column(Text, nullable=False)
+    flower_language: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    recognitions: Mapped[List["RecognitionRecord"]] = relationship(back_populates="flower")
+    comments: Mapped[List["Comment"]] = relationship(back_populates="flower")
 
 class RecognitionRecord(Base):
     __tablename__ = "recognition_records"
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
-    image_url = Column(String(512))
-    plant_id = Column(BigInteger, ForeignKey("flowers.id"))
-    user_id = Column(BigInteger, ForeignKey("users.id"))
-    confidence = Column(DECIMAL(5, 2))
-    created_at = Column(DateTime, server_default=func.now())
-    flower = relationship("Flower", backref="recognitions")
-    user = relationship("User", backref="recognitions")
+    
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    image_url: Mapped[Optional[str]] = mapped_column(String(512))
+    plant_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey("flowers.id"))
+    user_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey("users.id"))
+    confidence: Mapped[Optional[float]] = mapped_column(DECIMAL(5, 2))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    
+    flower: Mapped[Optional["Flower"]] = relationship(back_populates="recognitions")
+    user: Mapped[Optional["User"]] = relationship(back_populates="recognitions")
+
+class Comment(Base):
+    __tablename__ = "comments"
+    
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
+    flower_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("flowers.id"), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    
+    user: Mapped["User"] = relationship(back_populates="comments")
+    flower: Mapped["Flower"] = relationship(back_populates="comments")
+
+class Feedback(Base):
+    __tablename__ = "feedbacks"
+    
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Enum("pending", "processed"), default="pending")
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    
+    user: Mapped["User"] = relationship(back_populates="feedbacks")
+
+class ExpertApplication(Base):
+    __tablename__ = "expert_applications"
+    
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), unique=True, nullable=False)
+    proof_material: Mapped[str] = mapped_column(Text, nullable=False, comment="证明材料或图片链接")
+    status: Mapped[str] = mapped_column(Enum("pending", "approved", "rejected"), default="pending")
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    
+    user: Mapped["User"] = relationship(back_populates="expert_application")
+
+class VerificationCode(Base):
+    __tablename__ = "verification_codes"
+    
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    code: Mapped[str] = mapped_column(String(6), nullable=False)
+    type: Mapped[str] = mapped_column(Enum("register", "reset"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    is_used: Mapped[bool] = mapped_column(default=False)
