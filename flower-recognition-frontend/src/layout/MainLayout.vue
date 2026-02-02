@@ -9,11 +9,12 @@
           class="app-menu"
           router
         >
-          <el-menu-item index="/index">首页</el-menu-item>
-          <el-menu-item index="/knowledge">知识库</el-menu-item>
-          <el-menu-item index="/qa">智能问答</el-menu-item>
-          <el-menu-item index="/history">历史记录</el-menu-item>
-          <el-menu-item index="/profile">个人中心</el-menu-item>
+          <el-menu-item index="/hua-shi-jie/index">首页</el-menu-item>
+          <el-menu-item index="/hua-shi-jie/knowledge">知识库</el-menu-item>
+          <el-menu-item index="/hua-shi-jie/qa">智能问答</el-menu-item>
+          <el-menu-item index="/hua-shi-jie/history">历史记录</el-menu-item>
+          <el-menu-item index="/hua-shi-jie/profile">个人中心</el-menu-item>
+          <el-menu-item index="/hua-shi-jie/friends">好友</el-menu-item>
         </el-menu>
       </div>
     </el-header>
@@ -32,7 +33,7 @@ import { get } from '@/net'
 const route = useRoute()
 const router = useRouter()
 const store = useStore()
-const activeMenu = ref('/index')
+const activeMenu = ref('/hua-shi-jie/index')
 
 const updateActiveMenu = () => {
   activeMenu.value = route.path
@@ -45,7 +46,7 @@ onMounted(() => {
       store.auth.user = data
     }, () => {
       store.auth.user = null
-      router.push('/')
+      router.push('/hua-shi-jie/')
     })
   }
 })

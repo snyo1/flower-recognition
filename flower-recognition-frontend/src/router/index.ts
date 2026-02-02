@@ -1,11 +1,11 @@
-import { createRouter, createWebHashHistory } from 'vue-router'
+import { createRouter, createWebHistory } from 'vue-router'
 import { useStore } from '@/stores/index'
 
 const router = createRouter({
-  history: createWebHashHistory(import.meta.env.BASE_URL),
+  history: createWebHistory('/hua-shi-jie/'),
   routes: [
     {
-      path: '/',
+      path: '/hua-shi-jie/',
       name: 'welcome',
       component: () => import('@/views/WelcomeView.vue'),
       children: [
@@ -25,7 +25,7 @@ const router = createRouter({
       ]
     },
     {
-      path: '/index',
+      path: '/hua-shi-jie/index',
       component: () => import('@/layout/MainLayout.vue'),
       children: [
         {
@@ -36,7 +36,7 @@ const router = createRouter({
       ]
     },
     {
-      path: '/qa',
+      path: '/hua-shi-jie/qa',
       component: () => import('@/layout/MainLayout.vue'),
       children: [
         {
@@ -47,7 +47,18 @@ const router = createRouter({
       ]
     },
     {
-      path: '/knowledge',
+      path: '/hua-shi-jie/friends',
+      component: () => import('@/layout/MainLayout.vue'),
+      children: [
+        {
+          path: '',
+          name: 'friends',
+          component: () => import('@/views/FriendsView.vue')
+        }
+      ]
+    },
+    {
+      path: '/hua-shi-jie/knowledge',
       component: () => import('@/layout/MainLayout.vue'),
       children: [
         {
@@ -58,7 +69,7 @@ const router = createRouter({
       ]
     },
     {
-      path: '/history',
+      path: '/hua-shi-jie/history',
       component: () => import('@/layout/MainLayout.vue'),
       children: [
         {
@@ -69,7 +80,7 @@ const router = createRouter({
       ]
     },
     {
-      path: '/profile',
+      path: '/hua-shi-jie/profile',
       component: () => import('@/layout/MainLayout.vue'),
       children: [
         {
@@ -81,7 +92,7 @@ const router = createRouter({
     },
     {
       path: '/:pathMatch(.*)*',
-      redirect: '/'
+      redirect: '/hua-shi-jie/'
     }
   ],
 })
@@ -89,20 +100,26 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
   const store = useStore()
   const token = localStorage.getItem('access_token')
-  
-  if (to.name?.toString().startsWith('welcome-')) {
-    if (store.auth.user || token) {
-      next('/index')
-    } else {
-      next()
-    }
-  } else {
-    if (store.auth.user || token) {
-      next()
-    } else {
-      next('/')
-    }
+  const isAuthed = !!(store.auth.user || token)
+  const protectedPrefixes = [
+    '/hua-shi-jie/index',
+    '/hua-shi-jie/qa',
+    '/hua-shi-jie/friends',
+    '/hua-shi-jie/knowledge',
+    '/hua-shi-jie/history',
+    '/hua-shi-jie/profile',
+  ]
+
+  if (to.path === '/hua-shi-jie/') {
+    if (isAuthed) return next('/hua-shi-jie/index')
+    return next()
   }
+
+  if (!isAuthed && protectedPrefixes.some(p => to.path.startsWith(p))) {
+    return next('/hua-shi-jie/')
+  }
+
+  return next()
 })
 
 export default router

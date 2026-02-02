@@ -6,7 +6,7 @@ import vueDevTools from 'vite-plugin-vue-devtools'
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: './', // 使用相对路径，确保在任何域名下都能正常访问
+  base: '/hua-shi-jie/', // 设置基础路径，以实现 http://localhost:5173/hua-shi-jie/**
   mode: 'production', // 强制使用生产模式
   plugins: [
     vue(),

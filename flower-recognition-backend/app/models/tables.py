@@ -68,6 +68,7 @@ class Feedback(Base):
     
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
+    flower_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey("flowers.id"))
     content: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(Enum("pending", "processed"), default="pending")
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
@@ -95,3 +96,59 @@ class VerificationCode(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     is_used: Mapped[bool] = mapped_column(default=False)
+
+class Favorite(Base):
+    __tablename__ = "favorites"
+    
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False, index=True)
+    flower_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("flowers.id"), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    
+    user: Mapped["User"] = relationship()
+    flower: Mapped["Flower"] = relationship()
+
+class CommentLike(Base):
+    __tablename__ = "comment_likes"
+    
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False, index=True)
+    comment_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("comments.id"), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+class QAHistory(Base):
+    __tablename__ = "qa_history"
+    
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey("users.id"), index=True)
+    question: Mapped[str] = mapped_column(Text, nullable=False)
+    answer: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+class FriendRequest(Base):
+    __tablename__ = "friend_requests"
+    
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    requester_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), index=True)
+    target_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), index=True)
+    status: Mapped[str] = mapped_column(Enum("pending", "accepted", "rejected"), default="pending")
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+class Friend(Base):
+    __tablename__ = "friends"
+    
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), index=True)
+    friend_user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+class PrivacySettings(Base):
+    __tablename__ = "privacy_settings"
+    
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), unique=True)
+    show_email: Mapped[bool] = mapped_column(default=True)
+    show_recognition_count: Mapped[bool] = mapped_column(default=True)
+    show_favorites_count: Mapped[bool] = mapped_column(default=True)
+    show_qa_count: Mapped[bool] = mapped_column(default=True)
+    show_favorites_list: Mapped[bool] = mapped_column(default=True)

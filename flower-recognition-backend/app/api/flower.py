@@ -4,12 +4,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..models.schemas import FlowerIdentification
 from ..services.ai import identify_and_generate
 from ..services.db import get_db
-from ..models.tables import Flower, RecognitionRecord
+from ..models.tables import Flower, RecognitionRecord, User
+from .user import get_current_user
 
 router = APIRouter(prefix="/api/flower", tags=["花卉识别"])
 
 @router.post("/identify", response_model=FlowerIdentification)
-async def identify_flower(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+async def identify_flower(file: UploadFile = File(...), db: AsyncSession = Depends(get_db), current_user: User | None = Depends(get_current_user)):
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="只支持图片文件")
     try:
@@ -49,7 +50,7 @@ async def identify_flower(file: UploadFile = File(...), db: AsyncSession = Depen
             rec = RecognitionRecord(
                 image_url=None,
                 plant_id=plant_id,
-                user_id=None,
+                user_id=current_user.id if current_user else None,
                 confidence=ai_result.get("confidence", 90.0)
             )
             db.add(rec)

@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from ..services.db import get_db
-from ..models.tables import User
+from ..models.tables import User, RecognitionRecord
 from ..core.security import settings
 from jose import jwt
 from fastapi.security import OAuth2PasswordBearer
@@ -34,4 +34,20 @@ async def read_users_me(current_user: User = Depends(get_current_user)):
         "email": current_user.email,
         "role": current_user.role,
         "registration_date": current_user.registration_date
+    }
+
+@router.get("/stats")
+async def stats(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    # 识别次数
+    rec_count = (await db.execute(select(func.count(RecognitionRecord.id)).filter(RecognitionRecord.user_id == current_user.id))).scalar() or 0
+    # 收藏次数
+    from ..models.tables import Favorite
+    fav_count = (await db.execute(select(func.count(Favorite.id)).filter(Favorite.user_id == current_user.id))).scalar() or 0
+    # 问答次数
+    from ..models.tables import QAHistory
+    qa_count = (await db.execute(select(func.count(QAHistory.id)).filter(QAHistory.user_id == current_user.id))).scalar() or 0
+    return {
+        "recognitionCount": rec_count,
+        "favoritesCount": fav_count,
+        "qaCount": qa_count,
     }

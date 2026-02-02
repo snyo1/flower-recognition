@@ -218,9 +218,11 @@ const identifyFlower = async () => {
     const formData = new FormData()
     formData.append('file', currentFile.value)
 
+    const token = localStorage.getItem('access_token')
     const response = await axios.post(api.identify, formData, {
       headers: {
-        'Content-Type': 'multipart/form-data'
+        'Content-Type': 'multipart/form-data',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
       }
     })
 
@@ -247,7 +249,7 @@ const resetUpload = () => {
 
 const goToQA = () => {
   router.push({
-    path: '/qa',
+    path: '/hua-shi-jie/qa',
     query: { flower: result.value?.name }
   })
 }

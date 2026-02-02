@@ -2,14 +2,16 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import os
+from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy import text
 from sqladmin import Admin, ModelView
 from sqladmin.authentication import AuthenticationBackend
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
 from sqlalchemy import select
-from app.api import flower, qa, knowledge, auth, user
+from app.api import flower, qa, knowledge, auth, user, favorites, comments, friends, feedbacks
 from app.services.db import engine, AsyncSessionFactory
-from app.models.tables import User, Flower, RecognitionRecord, Comment, Feedback, ExpertApplication
+from app.models.tables import Base, User, Flower, RecognitionRecord, Comment, Feedback
 from app.core.security import verify_password
 
 load_dotenv()
@@ -25,12 +27,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 初始化数据库（如缺少新表则创建）
+@app.on_event("startup")
+async def on_startup():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
 # 注册API路由
 app.include_router(flower.router)
 app.include_router(qa.router)
 app.include_router(knowledge.router)
 app.include_router(auth.router)
 app.include_router(user.router)
+app.include_router(favorites.router)
+app.include_router(comments.router)
+app.include_router(friends.router)
+app.include_router(feedbacks.router)
 
 # Admin Authentication
 class AdminAuth(AuthenticationBackend):
@@ -92,12 +104,7 @@ class FlowerAdmin(ModelView, model=Flower):
     name = "花卉"
     name_plural = "花卉知识管理"
 
-class ExpertApplicationAdmin(ModelView, model=ExpertApplication):
-    column_list = [ExpertApplication.id, ExpertApplication.user_id, ExpertApplication.status, ExpertApplication.created_at]
-    column_searchable_list = [ExpertApplication.user_id]
-    column_filters = [ExpertApplication.status]
-    name = "专家申请"
-    name_plural = "专家申请审核"
+# 已移除专家申请审核界面
 
 class CommentAdmin(ModelView, model=Comment):
     column_list = [Comment.id, Comment.user_id, Comment.flower_id, Comment.content, Comment.created_at]
@@ -112,7 +119,6 @@ class FeedbackAdmin(ModelView, model=Feedback):
 
 admin.add_view(UserAdmin)
 admin.add_view(FlowerAdmin)
-admin.add_view(ExpertApplicationAdmin)
 admin.add_view(CommentAdmin)
 admin.add_view(FeedbackAdmin)
 

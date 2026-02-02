@@ -17,18 +17,16 @@ async def get_all_knowledge(keyword: str = "", db: AsyncSession = Depends(get_db
             q = q.filter((Flower.name.like(kw)) | (Flower.family.like(kw)) | (Flower.description.like(kw)))
         result = await db.execute(q)
         rows = result.scalars().all()
-        flowers = [
-            FlowerKnowledge(
-                name=row.name,
-                family=row.family,
-                color=row.color,
-                bloomingPeriod=row.blooming_period,
-                description=row.description,
-                careGuide=row.care_guide,
-                flowerLanguage=row.flower_language,
-            )
-            for row in rows
-        ]
+        flowers = [FlowerKnowledge(
+            id=row.id,
+            name=row.name,
+            family=row.family,
+            color=row.color,
+            bloomingPeriod=row.blooming_period,
+            description=row.description,
+            careGuide=row.care_guide,
+            flowerLanguage=row.flower_language,
+        ) for row in rows]
         return FlowerKnowledgeList(flowers=flowers)
     except SQLAlchemyError:
         return FlowerKnowledgeList(flowers=[])

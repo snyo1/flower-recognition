@@ -19,6 +19,7 @@ class QAResponse(BaseModel):
     answer: str
 
 class FlowerKnowledge(BaseModel):
+    id: int
     name: str
     family: str
     color: str

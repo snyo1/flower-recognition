@@ -1,15 +1,43 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends, Request
 from ..models.schemas import QARequest, QAResponse
 from ..services.ai import generate_text
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from ..services.db import get_db
+from ..models.tables import QAHistory, User
+from jose import jwt
+from ..core.security import settings
 
 router = APIRouter(prefix="/api/qa", tags=["智能问答"])
 
 @router.post("/chat", response_model=QAResponse)
-async def chat(request: QARequest):
+async def chat(request: QARequest, req: Request, db: AsyncSession = Depends(get_db)):
     try:
+        # 尝试从Authorization头中解析用户（可选）
+        auth = req.headers.get("Authorization", "")
+        current_user_id = None
+        if auth.startswith("Bearer "):
+            token = auth.removeprefix("Bearer ").strip()
+            try:
+                payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+                username = payload.get("sub")
+                if username:
+                    # 查找用户ID
+                    from ..services.db import AsyncSessionFactory
+                    async with AsyncSessionFactory() as s:
+                        result = await s.execute(select(User).filter(User.username == username))
+                        u = result.scalars().first()
+                        current_user_id = u.id if u else None
+            except Exception:
+                current_user_id = None
         prompt = f"请围绕花卉主题回答：{request.question}"
         ai = generate_text(prompt)
         if ai:
+            # 记录历史
+            if current_user_id:
+                row = QAHistory(user_id=current_user_id, question=request.question, answer=ai)
+                db.add(row)
+                await db.commit()
             return QAResponse(answer=ai)
         question = request.question.lower()
         answer = ""
@@ -27,6 +55,11 @@ async def chat(request: QARequest):
             answer = "施肥要遵循'薄肥勤施'的原则。生长期（春季到秋季）可每月施肥1-2次，冬季休眠期停止施肥。选择合适的肥料类型：观叶植物用氮肥为主的复合肥，观花植物在花期前增加磷钾肥。浓度要稀薄，避免烧伤根系。"
         else:
             answer = f"感谢您的提问！关于'{request.question}'，这是一个很好的问题。关于花卉养护，建议您根据具体的花卉品种来制定养护方案。"
+        # 记录历史
+        if current_user_id:
+            row = QAHistory(user_id=current_user_id, question=request.question, answer=answer)
+            db.add(row)
+            await db.commit()
         return QAResponse(answer=answer)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"问答失败: {str(e)}")

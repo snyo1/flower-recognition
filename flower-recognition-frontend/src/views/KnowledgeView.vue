@@ -187,10 +187,74 @@
               <el-icon><Star /></el-icon>
               收藏
             </el-button>
+            <el-button type="success" @click="openCommentArea">评论</el-button>
+            <el-button type="warning" @click="openFeedbackDialog">反馈</el-button>
             <el-button @click="detailVisible = false">关闭</el-button>
+          </div>
+
+          <div v-if="commentAreaVisible" class="comments-section">
+            <el-divider content-position="left">评论</el-divider>
+            <div class="comment-input">
+              <el-input
+                v-model="newComment"
+                type="textarea"
+                :rows="3"
+                placeholder="发表你的看法（支持最多300字）"
+                maxlength="300"
+                show-word-limit
+              />
+              <div class="comment-actions">
+                <el-button type="primary" @click="submitComment" :loading="commentSubmitting">发布评论</el-button>
+                <el-button @click="commentAreaVisible = false">收起</el-button>
+              </div>
+            </div>
+            <el-empty v-if="comments.length === 0" description="暂无评论，来发表第一条吧" />
+            <div v-else class="comment-list">
+              <el-card
+                v-for="c in comments"
+                :key="c.id"
+                class="comment-item"
+                shadow="never"
+              >
+                <div class="comment-content">{{ c.content }}</div>
+                <div class="comment-meta">
+                  <span class="comment-time">{{ formatTime(c.created_at) }}</span>
+                  <div class="comment-actions-inline">
+                    <el-button text type="primary" @click="toggleLike(c.id)">👍 {{ c.likes }}</el-button>
+                    <el-button
+                      v-if="canDeleteComment(c)"
+                      text
+                      type="danger"
+                      @click="removeComment(c.id)"
+                    >
+                      删除
+                    </el-button>
+                  </div>
+                </div>
+              </el-card>
+            </div>
           </div>
         </div>
       </div>
+    </el-dialog>
+
+    <el-dialog
+      v-model="feedbackDialogVisible"
+      title="提交反馈"
+      width="600px"
+    >
+      <el-input
+        v-model="feedbackContent"
+        type="textarea"
+        :rows="5"
+        placeholder="针对该花卉知识的建议或问题（最多500字）"
+        maxlength="500"
+        show-word-limit
+      />
+      <template #footer>
+        <el-button @click="feedbackDialogVisible = false">取消</el-button>
+        <el-button type="warning" @click="submitFeedback" :loading="feedbackSubmitting">提交</el-button>
+      </template>
     </el-dialog>
   </div>
 </template>
@@ -202,6 +266,7 @@ import { ElMessage } from 'element-plus'
 import { Search, Picture, ChatDotRound, Star } from '@element-plus/icons-vue'
 import axios from 'axios'
 import { api } from '../api/config'
+import { useStore } from '@/stores'
 
 interface Flower {
   id: number
@@ -223,6 +288,25 @@ const detailVisible = ref(false)
 const selectedFlower = ref<Flower | null>(null)
 
 const flowers = ref<Flower[]>([])
+
+// 评论相关
+interface CommentItem {
+  id: number
+  user_id: number
+  flower_id: number
+  content: string
+  created_at: string
+  likes: number
+}
+const comments = ref<CommentItem[]>([])
+const newComment = ref('')
+const commentAreaVisible = ref(false)
+const commentSubmitting = ref(false)
+
+// 反馈相关
+const feedbackDialogVisible = ref(false)
+const feedbackContent = ref('')
+const feedbackSubmitting = ref(false)
 
 // 科属分类
 const familyCategories = ref(['蔷薇科', '菊科', '兰科', '百合科', '豆科', '仙人掌科'])
@@ -401,12 +485,14 @@ const handleSearch = () => {
 const viewDetail = (flower: Flower) => {
   selectedFlower.value = flower
   detailVisible.value = true
+  commentAreaVisible.value = true
+  loadComments()
 }
 
 // 发起问答
 const startQA = (flower: Flower) => {
   router.push({
-    path: '/qa',
+    path: '/hua-shi-jie/qa',
     query: { flower: flower.name }
   })
   detailVisible.value = false
@@ -414,7 +500,115 @@ const startQA = (flower: Flower) => {
 
 // 添加到收藏
 const addToFavorites = (flower: Flower) => {
-  ElMessage.success(`已将${flower.name}添加到收藏`)
+  const token = localStorage.getItem('access_token')
+  if (!token) {
+    ElMessage.warning('请先登录后再进行收藏')
+    return
+  }
+  axios.post(`/api/favorites/add/${(flower as any).id || 0}`, {}, {
+    headers: { Authorization: `Bearer ${token}` }
+  }).then(() => {
+    ElMessage.success(`已将${flower.name}添加到收藏`)
+  }).catch(err => {
+    ElMessage.error(err?.response?.data?.detail || '收藏失败')
+  })
+}
+
+const tokenHeader = () => {
+  const token = localStorage.getItem('access_token')
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
+const openCommentArea = () => {
+  commentAreaVisible.value = true
+  loadComments()
+}
+
+const loadComments = () => {
+  if (!selectedFlower.value) return
+  axios.get(`/api/comments/list/${selectedFlower.value.id}`).then(({ data }) => {
+    comments.value = data
+  }).catch(() => {
+    comments.value = []
+  })
+}
+
+const submitComment = () => {
+  if (!selectedFlower.value) return
+  if (!newComment.value.trim()) {
+    ElMessage.warning('请输入评论内容')
+    return
+  }
+  commentSubmitting.value = true
+  axios.post(
+    `/api/comments/add/${selectedFlower.value.id}`,
+    null,
+    { params: { content: newComment.value }, headers: tokenHeader() }
+  ).then(() => {
+    ElMessage.success('评论已发布')
+    newComment.value = ''
+    loadComments()
+  }).catch(err => {
+    ElMessage.error(err?.response?.data?.detail || '发布失败')
+  }).finally(() => {
+    commentSubmitting.value = false
+  })
+}
+
+const toggleLike = (commentId: number) => {
+  axios.post(`/api/comments/${commentId}/like`, null, { headers: tokenHeader() }).then(() => {
+    loadComments()
+  })
+}
+
+const removeComment = (commentId: number) => {
+  axios.delete(`/api/comments/remove/${commentId}`, { headers: tokenHeader() }).then(() => {
+    ElMessage.success('评论已删除')
+    loadComments()
+  }).catch(err => {
+    ElMessage.error(err?.response?.data?.detail || '删除失败')
+  })
+}
+
+const canDeleteComment = (c: CommentItem) => {
+  const userId = (useStore().auth.user?.id as any) || null
+  return userId && c.user_id === userId
+}
+
+const formatTime = (iso: string) => {
+  const d = new Date(iso)
+  const now = new Date()
+  const diff = (now.getTime() - d.getTime()) / 1000
+  if (diff < 60) return '刚刚'
+  if (diff < 3600) return `${Math.floor(diff/60)}分钟前`
+  if (diff < 86400) return `${Math.floor(diff/3600)}小时前`
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+}
+
+const openFeedbackDialog = () => {
+  feedbackDialogVisible.value = true
+}
+
+const submitFeedback = () => {
+  if (!selectedFlower.value) return
+  if (!feedbackContent.value.trim()) {
+    ElMessage.warning('请输入反馈内容')
+    return
+  }
+  feedbackSubmitting.value = true
+  axios.post(
+    `/api/feedbacks/add/${selectedFlower.value.id}`,
+    null,
+    { params: { content: feedbackContent.value }, headers: tokenHeader() }
+  ).then(() => {
+    ElMessage.success('反馈已提交')
+    feedbackDialogVisible.value = false
+    feedbackContent.value = ''
+  }).catch(err => {
+    ElMessage.error(err?.response?.data?.detail || '提交失败')
+  }).finally(() => {
+    feedbackSubmitting.value = false
+  })
 }
 </script>
 
@@ -737,5 +931,32 @@ const addToFavorites = (flower: Flower) => {
   .detail-actions .el-button {
     width: 100%;
   }
+}
+
+.comments-section {
+  margin-top: 16px;
+}
+.comment-input {
+  margin-bottom: 12px;
+}
+.comment-actions {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+}
+.comment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.comment-item {
+  padding: 8px 12px;
+}
+.comment-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: #666;
 }
 </style>

@@ -20,8 +20,8 @@
                 <el-icon :size="50"><User /></el-icon>
               </el-avatar>
             </div>
-            <h2 class="user-name">{{ userInfo.nickname }}</h2>
-            <p class="user-phone">{{ userInfo.phone || '未绑定手机号' }}</p>
+            <h2 class="user-name">{{ store.auth.user?.username || '未登录用户' }}</h2>
+            <p class="user-phone">{{ store.auth.user?.email || '未绑定邮箱' }}</p>
 
             <el-divider />
 
@@ -64,7 +64,7 @@
                 <el-icon class="setting-icon"><Moon /></el-icon>
                 <span>深色模式</span>
               </div>
-              <el-switch v-model="settings.darkMode" @change="saveSettings" />
+              <el-switch v-model="settings.darkMode" @change="toggleDarkMode" />
             </div>
 
             <div class="setting-item">
@@ -114,7 +114,7 @@
 
           <div v-else class="favorites-grid">
             <el-card
-              v-for="flower in filteredFavorites"
+              v-for="flower in pagedFavorites"
               :key="flower.id"
               class="favorite-card"
               shadow="hover"
@@ -148,6 +148,16 @@
             </el-card>
           </div>
         </el-card>
+        <div class="pagination-wrapper" v-if="filteredFavorites.length > pageSize">
+          <el-pagination
+            background
+            layout="prev, pager, next"
+            :total="filteredFavorites.length"
+            :page-size="pageSize"
+            :current-page="currentPage"
+            @current-change="(p:number)=> currentPage = p"
+          />
+        </div>
       </el-col>
     </el-row>
 
@@ -202,6 +212,54 @@
         </el-button>
       </template>
     </el-dialog>
+    
+    <el-dialog
+      v-model="privacyDialog"
+      title="隐私设置"
+      width="520px"
+    >
+      <div class="settings-list">
+        <div class="setting-item">
+          <div class="setting-info">
+            <el-icon class="setting-icon"><Lock /></el-icon>
+            <span>显示邮箱给好友</span>
+          </div>
+          <el-switch v-model="privacySettings.show_email" />
+        </div>
+        <div class="setting-item">
+          <div class="setting-info">
+            <el-icon class="setting-icon"><Lock /></el-icon>
+            <span>允许好友查看识别次数</span>
+          </div>
+          <el-switch v-model="privacySettings.show_recognition_count" />
+        </div>
+        <div class="setting-item">
+          <div class="setting-info">
+            <el-icon class="setting-icon"><Lock /></el-icon>
+            <span>允许好友查看收藏数</span>
+          </div>
+          <el-switch v-model="privacySettings.show_favorites_count" />
+        </div>
+        <div class="setting-item">
+          <div class="setting-info">
+            <el-icon class="setting-icon"><Lock /></el-icon>
+            <span>允许好友查看问答次数</span>
+          </div>
+          <el-switch v-model="privacySettings.show_qa_count" />
+        </div>
+        <div class="setting-item">
+          <div class="setting-info">
+            <el-icon class="setting-icon"><Lock /></el-icon>
+            <span>允许好友查看收藏列表</span>
+          </div>
+          <el-switch v-model="privacySettings.show_favorites_list" />
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="privacyDialog = false">取消</el-button>
+        <el-button type="primary" @click="savePrivacy" :loading="privacySaving">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -209,6 +267,8 @@
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
+import { useStore } from '@/stores'
+import axios from 'axios'
 import {
   User,
   Edit,
@@ -223,6 +283,7 @@ import {
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
+const store = useStore()
 
 interface UserInfo {
   avatar: string
@@ -246,12 +307,12 @@ interface FavoriteItem {
 
 const userInfo = ref<UserInfo>({
   avatar: '',
-  nickname: '花卉爱好者',
+  nickname: '',
   phone: '',
   bio: '热爱花卉，享受自然',
-  recognitionCount: 12,
-  favoritesCount: 8,
-  qaCount: 15
+  recognitionCount: 0,
+  favoritesCount: 0,
+  qaCount: 0
 })
 
 const settings = ref({
@@ -259,53 +320,44 @@ const settings = ref({
   darkMode: false
 })
 
-const favorites = ref<FavoriteItem[]>([
-  {
-    id: 1,
-    name: '月季',
-    family: '蔷薇科',
-    color: '红色、粉色、黄色等',
-    bloomingPeriod: '5月-10月',
-    description: '月季花被称为"花中皇后"，四季开花，花色丰富，芳香浓郁。',
-    timestamp: Date.now() - 86400000
-  },
-  {
-    id: 2,
-    name: '玫瑰',
-    family: '蔷薇科',
-    color: '红色、粉色、白色等',
-    bloomingPeriod: '5月-10月',
-    description: '玫瑰是世界著名的观赏植物，花形优美，香气浓郁。',
-    timestamp: Date.now() - 172800000
-  },
-  {
-    id: 3,
-    name: '向日葵',
-    family: '菊科',
-    color: '金黄色',
-    bloomingPeriod: '7月-9月',
-    description: '向日葵因花序随太阳转动而得名，象征光明和希望。',
-    timestamp: Date.now() - 259200000
-  },
-  {
-    id: 4,
-    name: '兰花',
-    family: '兰科',
-    color: '白色、紫色、绿色等',
-    bloomingPeriod: '全年',
-    description: '兰花是中国的传统名花，高雅清香，被誉为"花中君子"。',
-    timestamp: Date.now() - 345600000
-  },
-  {
-    id: 5,
-    name: '百合',
-    family: '百合科',
-    color: '白色、粉色、黄色等',
-    bloomingPeriod: '5月-7月',
-    description: '百合花姿雅致，清香怡人，寓意百年好合。',
-    timestamp: Date.now() - 432000000
-  }
-])
+const favorites = ref<FavoriteItem[]>([])
+
+const pageSize = 8
+let currentPage = 1
+const pagedFavorites = computed(() => {
+  const start = (currentPage - 1) * pageSize
+  return filteredFavorites.value.slice(start, start + pageSize)
+})
+
+const tokenHeader = () => {
+  const token = localStorage.getItem('access_token')
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
+const loadStats = () => {
+  axios.get('/api/user/stats', { headers: tokenHeader() }).then(({data}) => {
+    userInfo.value.recognitionCount = data.recognitionCount
+    userInfo.value.favoritesCount = data.favoritesCount
+    userInfo.value.qaCount = data.qaCount
+  })
+}
+
+const loadFavorites = () => {
+  axios.get('/api/favorites/list', { headers: tokenHeader() }).then(({data}) => {
+    favorites.value = data.map((d:any) => ({
+      id: d.flower_id,
+      name: d.name,
+      family: d.family,
+      color: d.color,
+      bloomingPeriod: d.bloomingPeriod,
+      description: d.description,
+      timestamp: Date.parse(d.timestamp),
+    }))
+  })
+}
+
+loadStats()
+loadFavorites()
 
 const searchFavorite = ref('')
 const editProfileDialog = ref(false)
@@ -354,12 +406,42 @@ const formatFavoriteTime = (timestamp: number) => {
   return `${date.getMonth() + 1}月${date.getDate()}日`
 }
 
-const saveSettings = () => {
-  ElMessage.success('设置已保存')
+const toggleDarkMode = () => {
+  const root = document.documentElement
+  if (settings.value.darkMode) {
+    root.classList.add('dark')
+  } else {
+    root.classList.remove('dark')
+  }
+  ElMessage.success('已切换主题')
 }
 
+const saveSettings = () => {
+  ElMessage.success('设置已更新')
+}
+
+const privacyDialog = ref(false)
+const privacySaving = ref(false)
+const privacySettings = ref({
+  show_email: true,
+  show_recognition_count: true,
+  show_favorites_count: true,
+  show_qa_count: true,
+  show_favorites_list: true
+})
 const openPrivacySettings = () => {
-  ElMessage.info('隐私设置功能开发中')
+  privacyDialog.value = true
+}
+const savePrivacy = () => {
+  privacySaving.value = true
+  axios.post('/api/friends/privacy/save', privacySettings.value, { headers: tokenHeader() }).then(() => {
+    ElMessage.success('隐私设置已保存')
+    privacyDialog.value = false
+  }).catch(err => {
+    ElMessage.error(err?.response?.data?.detail || '保存失败')
+  }).finally(() => {
+    privacySaving.value = false
+  })
 }
 
 const logout = async () => {
@@ -373,8 +455,10 @@ const logout = async () => {
         type: 'warning'
       }
     )
+    localStorage.removeItem('access_token')
+    store.auth.user = null
     ElMessage.success('已退出登录')
-    router.push('/')
+    router.push('/hua-shi-jie/')
   } catch {
     // 用户取消
   }
@@ -416,7 +500,7 @@ const viewDetail = (flower: FavoriteItem) => {
 
 const askQuestion = (flower: FavoriteItem) => {
   router.push({
-    path: '/qa',
+    path: '/hua-shi-jie/qa',
     query: { flower: flower.name }
   })
 }
@@ -442,6 +526,36 @@ const removeFavorite = async (id: number) => {
 </script>
 
 <style scoped>
+.dark {
+  --bg-color: #1f1f1f;
+  --text-color: #e5e5e5;
+  --card-bg: #2a2a2a;
+  --border-color: #3a3a3a;
+}
+
+.profile-card, .settings-card, .favorites-card {
+  background-color: var(--card-bg, #fff);
+  color: var(--text-color, #333);
+}
+
+.card-title {
+  color: var(--text-color, #333333);
+}
+
+.favorite-actions .el-button[type="primary"] {
+  color: #0052cc;
+}
+.favorite-actions .el-button[type="danger"] {
+  color: #d93025;
+}
+
+.el-button.btn-strong {
+  background-color: #0052cc;
+  color: #ffffff;
+}
+.el-button.btn-strong:hover {
+  filter: brightness(1.05);
+}
 .profile-page {
   width: 100%;
   max-width: 1600px;
@@ -453,6 +567,8 @@ const removeFavorite = async (id: number) => {
 .settings-card,
 .favorites-card {
   margin-bottom: 24px;
+  max-height: 720px;
+  overflow-y: auto;
 }
 
 .card-header {
@@ -561,6 +677,11 @@ const removeFavorite = async (id: number) => {
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 20px;
   padding: 20px 0;
+}
+.pagination-wrapper {
+  display: flex;
+  justify-content: center;
+  margin-top: 12px;
 }
 
 .favorite-card {
