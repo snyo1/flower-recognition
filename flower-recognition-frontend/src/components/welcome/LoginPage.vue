@@ -25,7 +25,7 @@ const login = () => {
       ElMessage.success(message)
       get('api/user/me',(message)=>{
         store.auth.user = message
-        router.push('/index')
+        router.push('/hua-shi-jie/index')
       },()=>{
         store.auth.user = null
       })
@@ -53,7 +53,7 @@ const login = () => {
       </el-col>
 
       <el-col :span="12" style="text-align: right">
-        <el-link @click="router.push('/forget')">忘记密码？</el-link>
+        <el-link @click="router.push('/hua-shi-jie/forget')">忘记密码？</el-link>
       </el-col>
     </el-row>
 
@@ -64,7 +64,7 @@ const login = () => {
       <span style="color: gray;font-size: 13px;background-color: antiquewhite;padding: 0">没有账号</span>
     </el-divider>
     <div>
-      <el-button style="width: 200px" @click="router.push('/register')" type="warning" plain>注册账号</el-button>
+      <el-button style="width: 200px" @click="router.push('/hua-shi-jie/register')" type="warning" plain>注册账号</el-button>
     </div>
   </div>
 </template>

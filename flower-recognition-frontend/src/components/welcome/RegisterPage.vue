@@ -155,7 +155,7 @@ const register = () => {
         code: form.code
       }, (message) => {
         ElMessage.success(message)
-        router.push("/")
+        router.push("/hua-shi-jie/")
       })
     } else {
       ElMessage.warning('请完整填写注册表单内容！')
