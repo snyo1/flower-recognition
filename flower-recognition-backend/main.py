@@ -9,7 +9,7 @@ from sqladmin.authentication import AuthenticationBackend
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
 from sqlalchemy import select
-from app.api import flower, qa, knowledge, auth, user, favorites, comments, friends, feedbacks
+from app.api import flower, qa, knowledge, auth, user, favorites, comments, feedbacks
 from app.services.db import engine, AsyncSessionFactory
 from app.models.tables import Base, User, Flower, RecognitionRecord, Comment, Feedback
 from app.core.security import verify_password
@@ -41,7 +41,6 @@ app.include_router(auth.router)
 app.include_router(user.router)
 app.include_router(favorites.router)
 app.include_router(comments.router)
-app.include_router(friends.router)
 app.include_router(feedbacks.router)
 
 # Admin Authentication

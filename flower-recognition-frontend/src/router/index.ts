@@ -47,17 +47,6 @@ const router = createRouter({
       ]
     },
     {
-      path: '/hua-shi-jie/friends',
-      component: () => import('@/layout/MainLayout.vue'),
-      children: [
-        {
-          path: '',
-          name: 'friends',
-          component: () => import('@/views/FriendsView.vue')
-        }
-      ]
-    },
-    {
       path: '/hua-shi-jie/knowledge',
       component: () => import('@/layout/MainLayout.vue'),
       children: [
@@ -92,7 +81,8 @@ const router = createRouter({
     },
     {
       path: '/:pathMatch(.*)*',
-      redirect: '/hua-shi-jie/'
+      name: 'not-found',
+      component: () => import('@/views/WelcomeView.vue') // Reusing welcome view or any view, logic will be in beforeEach
     }
   ],
 })
@@ -101,21 +91,28 @@ router.beforeEach((to, from, next) => {
   const store = useStore()
   const token = localStorage.getItem('access_token')
   const isAuthed = !!(store.auth.user || token)
-  const protectedPrefixes = [
-    '/hua-shi-jie/index',
-    '/hua-shi-jie/qa',
-    '/hua-shi-jie/friends',
-    '/hua-shi-jie/knowledge',
-    '/hua-shi-jie/history',
-    '/hua-shi-jie/profile',
-  ]
 
-  if (to.path === '/hua-shi-jie/') {
-    if (isAuthed) return next('/hua-shi-jie/index')
+  // 1. 如果请求的是不存在的页面 (not-found 路由)
+  if (to.name === 'not-found') {
+    if (isAuthed) {
+      return next('/hua-shi-jie/index')
+    } else {
+      return next('/hua-shi-jie/')
+    }
+  }
+
+  // 2. 访问登录/注册相关页面
+  const isWelcomePage = to.path === '/hua-shi-jie/' || to.path.startsWith('/hua-shi-jie/register') || to.path.startsWith('/hua-shi-jie/forget')
+  
+  if (isWelcomePage) {
+    if (isAuthed) {
+      return next('/hua-shi-jie/index')
+    }
     return next()
   }
 
-  if (!isAuthed && protectedPrefixes.some(p => to.path.startsWith(p))) {
+  // 3. 访问受保护页面 (非登录/注册页面)
+  if (!isAuthed) {
     return next('/hua-shi-jie/')
   }
 

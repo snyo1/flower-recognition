@@ -143,16 +143,15 @@ const sendMessage = async () => {
   const currentFlower = route.query.flower as string || extractFlowerFromHistory()
 
   try {
-    // 限制历史记录为最近的5轮对话（10条消息）
-    const recentHistory = messages.value.slice(-10)
+    // 限制历史记录为最近的5轮对话（10条消息），并转换为后端要求的格式
+    const recentHistory = messages.value.slice(-10).map(msg => ({
+      role: msg.role,
+      content: msg.content
+    }))
 
     const response = await axios.post(api.chat, {
       question: userQuestion,
-      history: recentHistory,
-      context: {
-        flower: currentFlower,
-        conversationId: generateConversationId()
-      }
+      history: recentHistory
     })
 
     const assistantAnswer = response.data.answer
@@ -426,7 +425,7 @@ onMounted(() => {
 .send-btn {
   background-color: #4CAF50;
   border-color: #4CAF50;
-  color: white;
+  color: white !important;
   border-radius: 10px;
   font-family: 'Roboto', sans-serif;
   font-weight: 700;

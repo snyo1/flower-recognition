@@ -2,7 +2,7 @@
 import {ref, onMounted, onUnmounted} from 'vue'
 import photo1 from '@/assets/image/1.jpg'
 import photo2 from '@/assets/image/2.jpg'
-import photo3 from '@/assets/image/3.png'
+import photo3 from '@/assets/image/3.jpg'
 import photo4 from '@/assets/image/4.jpg'
 
 // 定义图片数组

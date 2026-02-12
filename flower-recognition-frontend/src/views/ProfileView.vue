@@ -39,47 +39,10 @@
                 <div class="stat-label">问答次数</div>
               </div>
             </div>
-          </div>
-        </el-card>
-
-        <!-- 设置卡片 -->
-        <el-card class="settings-card">
-          <template #header>
-            <div class="card-header">
-              <span class="card-title">⚙️ 设置</span>
-            </div>
-          </template>
-
-          <div class="settings-list">
-            <div class="setting-item">
-              <div class="setting-info">
-                <el-icon class="setting-icon"><Bell /></el-icon>
-                <span>消息通知</span>
-              </div>
-              <el-switch v-model="settings.notification" @change="saveSettings" />
-            </div>
-
-            <div class="setting-item">
-              <div class="setting-info">
-                <el-icon class="setting-icon"><Moon /></el-icon>
-                <span>深色模式</span>
-              </div>
-              <el-switch v-model="settings.darkMode" @change="toggleDarkMode" />
-            </div>
-
-            <div class="setting-item">
-              <div class="setting-info">
-                <el-icon class="setting-icon"><Lock /></el-icon>
-                <span>隐私设置</span>
-              </div>
-              <el-button link type="primary" @click="openPrivacySettings">
-                管理
-              </el-button>
-            </div>
 
             <el-divider />
 
-            <el-button type="danger" style="width: 100%" @click="logout">
+            <el-button type="danger" plain style="width: 100%" @click="logout">
               <el-icon><SwitchButton /></el-icon>
               退出登录
             </el-button>
@@ -212,54 +175,6 @@
         </el-button>
       </template>
     </el-dialog>
-    
-    <el-dialog
-      v-model="privacyDialog"
-      title="隐私设置"
-      width="520px"
-    >
-      <div class="settings-list">
-        <div class="setting-item">
-          <div class="setting-info">
-            <el-icon class="setting-icon"><Lock /></el-icon>
-            <span>显示邮箱给好友</span>
-          </div>
-          <el-switch v-model="privacySettings.show_email" />
-        </div>
-        <div class="setting-item">
-          <div class="setting-info">
-            <el-icon class="setting-icon"><Lock /></el-icon>
-            <span>允许好友查看识别次数</span>
-          </div>
-          <el-switch v-model="privacySettings.show_recognition_count" />
-        </div>
-        <div class="setting-item">
-          <div class="setting-info">
-            <el-icon class="setting-icon"><Lock /></el-icon>
-            <span>允许好友查看收藏数</span>
-          </div>
-          <el-switch v-model="privacySettings.show_favorites_count" />
-        </div>
-        <div class="setting-item">
-          <div class="setting-info">
-            <el-icon class="setting-icon"><Lock /></el-icon>
-            <span>允许好友查看问答次数</span>
-          </div>
-          <el-switch v-model="privacySettings.show_qa_count" />
-        </div>
-        <div class="setting-item">
-          <div class="setting-info">
-            <el-icon class="setting-icon"><Lock /></el-icon>
-            <span>允许好友查看收藏列表</span>
-          </div>
-          <el-switch v-model="privacySettings.show_favorites_list" />
-        </div>
-      </div>
-      <template #footer>
-        <el-button @click="privacyDialog = false">取消</el-button>
-        <el-button type="primary" @click="savePrivacy" :loading="privacySaving">保存</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
@@ -274,7 +189,6 @@ import {
   Edit,
   Bell,
   Moon,
-  Lock,
   SwitchButton,
   Picture,
   Clock,
@@ -313,11 +227,6 @@ const userInfo = ref<UserInfo>({
   recognitionCount: 0,
   favoritesCount: 0,
   qaCount: 0
-})
-
-const settings = ref({
-  notification: true,
-  darkMode: false
 })
 
 const favorites = ref<FavoriteItem[]>([])
@@ -404,44 +313,6 @@ const formatFavoriteTime = (timestamp: number) => {
   if (days < 30) return `${Math.floor(days / 7)}周前`
 
   return `${date.getMonth() + 1}月${date.getDate()}日`
-}
-
-const toggleDarkMode = () => {
-  const root = document.documentElement
-  if (settings.value.darkMode) {
-    root.classList.add('dark')
-  } else {
-    root.classList.remove('dark')
-  }
-  ElMessage.success('已切换主题')
-}
-
-const saveSettings = () => {
-  ElMessage.success('设置已更新')
-}
-
-const privacyDialog = ref(false)
-const privacySaving = ref(false)
-const privacySettings = ref({
-  show_email: true,
-  show_recognition_count: true,
-  show_favorites_count: true,
-  show_qa_count: true,
-  show_favorites_list: true
-})
-const openPrivacySettings = () => {
-  privacyDialog.value = true
-}
-const savePrivacy = () => {
-  privacySaving.value = true
-  axios.post('/api/friends/privacy/save', privacySettings.value, { headers: tokenHeader() }).then(() => {
-    ElMessage.success('隐私设置已保存')
-    privacyDialog.value = false
-  }).catch(err => {
-    ElMessage.error(err?.response?.data?.detail || '保存失败')
-  }).finally(() => {
-    privacySaving.value = false
-  })
 }
 
 const logout = async () => {

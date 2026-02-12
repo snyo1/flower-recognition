@@ -35,6 +35,7 @@ body {
 .el-button--primary {
   background-color: #4CAF50 !important;
   border-color: #4CAF50 !important;
+  color: #FFFFFF !important;
   border-radius: 8px;
   font-family: 'Roboto', sans-serif;
   font-weight: 700;

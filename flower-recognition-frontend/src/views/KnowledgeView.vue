@@ -52,9 +52,16 @@
             <el-tag
               v-for="color in colorCategories"
               :key="color.name"
-              :color="color.value"
-              :effect="selectedColor === color.name ? 'dark' : 'plain'"
-              class="filter-tag"
+              color="#FFFFFF"
+              effect="plain"
+              class="filter-tag color-tag"
+              :style="{ 
+                borderColor: color.value, 
+                color: color.value,
+                borderWidth: selectedColor === color.name ? '3px' : '1px',
+                fontWeight: selectedColor === color.name ? '700' : '400',
+                transform: selectedColor === color.name ? 'scale(1.1)' : 'scale(1)'
+              }"
               @click="selectColor(color.name)"
             >
               {{ color.name }}
@@ -662,11 +669,17 @@ const submitFeedback = () => {
 
 .filter-tag {
   cursor: pointer;
-  font-family: 'Roboto', sans-serif;
-  font-size: 15px;
+  transition: all 0.3s ease;
   padding: 10px 18px;
-  border-radius: 8px;
-  transition: all 0.3s;
+  font-family: 'Roboto', sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  border-radius: 20px;
+}
+
+.color-tag {
+  background-color: #FFFFFF !important;
+  border-width: 2px;
 }
 
 .filter-tag:hover {

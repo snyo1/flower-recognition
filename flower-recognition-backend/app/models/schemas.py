@@ -11,6 +11,9 @@ class FlowerIdentification(BaseModel):
     flowerLanguage: str
     confidence: float
 
+class BatchIdentificationResponse(BaseModel):
+    results: List[FlowerIdentification]
+
 class QARequest(BaseModel):
     question: str
     history: Optional[List[dict]] = []

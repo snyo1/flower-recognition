@@ -14,33 +14,37 @@
           ref="uploadRef"
           class="upload-demo"
           drag
+          multiple
           :auto-upload="false"
           :on-change="handleFileChange"
-          :limit="1"
+          :file-list="fileList"
           accept="image/jpeg,image/png"
         >
           <div class="upload-content">
             <el-icon class="upload-icon" :size="48"><UploadFilled /></el-icon>
             <div class="upload-text-primary">上传花卉图片</div>
-            <div class="upload-text-secondary">支持JPG/PNG格式，最大5MB</div>
+            <div class="upload-text-secondary">支持多张图片批量识别 (JPG/PNG格式)</div>
           </div>
         </el-upload>
       </div>
 
-      <div v-if="previewUrl" class="preview-section">
-        <div class="preview-container">
-          <el-image
-            :src="previewUrl"
-            fit="contain"
-            class="preview-image"
-          />
-          <el-button
-            class="delete-btn"
-            type="danger"
-            :icon="Delete"
-            circle
-            @click="resetUpload"
-          />
+      <div v-if="previewUrls.length > 0" class="preview-section">
+        <div class="preview-grid">
+          <div v-for="(url, index) in previewUrls" :key="index" class="preview-container">
+            <el-image
+              :src="url"
+              fit="cover"
+              class="preview-image-small"
+            />
+            <el-button
+              class="delete-btn-small"
+              type="danger"
+              :icon="Delete"
+              circle
+              size="small"
+              @click="removeFile(index)"
+            />
+          </div>
         </div>
       </div>
 
@@ -56,82 +60,86 @@
           type="primary"
           class="btn-primary"
           :icon="Camera"
-          :disabled="!previewUrl"
+          :disabled="previewUrls.length === 0"
           @click="identifyFlower"
           :loading="identifying"
         >
-          开始识别
+          {{ previewUrls.length > 1 ? '批量识别' : '开始识别' }}
         </el-button>
       </div>
     </el-card>
 
-    <!-- 识别结果页 - 左右分栏布局 -->
-    <el-card v-if="result" class="result-card">
-      <div class="result-layout">
-        <!-- 左侧：原图展示区 -->
-        <div class="result-left">
-          <div class="image-container">
-            <el-image
-              :src="previewUrl"
-              fit="contain"
-              class="result-image"
-            />
-            <div class="confidence-badge">
-              <el-icon class="badge-icon"><Check /></el-icon>
-              <span>识别准确率：{{ result.confidence }}%</span>
+    <!-- 识别结果列表 -->
+    <div v-if="results.length > 0" class="results-list">
+      <el-divider content-position="center">识别结果 ({{ results.length }})</el-divider>
+      
+      <el-card v-for="(res, idx) in results" :key="idx" class="result-card">
+        <div class="result-layout">
+          <!-- 左侧：原图展示区 -->
+          <div class="result-left">
+            <div class="image-container">
+              <el-image
+                :src="res.imagePreview || previewUrls[idx]"
+                fit="contain"
+                class="result-image"
+              />
+              <div class="confidence-badge">
+                <el-icon class="badge-icon"><Check /></el-icon>
+                <span>识别准确率：{{ res.confidence }}%</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 右侧：识别信息区 -->
+          <div class="result-right">
+            <!-- 一级信息 -->
+            <div class="result-section-primary">
+              <h2 class="flower-name">{{ res.name }}</h2>
+              <p class="flower-family">{{ res.family }}</p>
+            </div>
+
+            <!-- 二级信息 -->
+            <el-descriptions :column="1" border class="result-descriptions">
+              <el-descriptions-item label="颜色特征">
+                {{ res.color }}
+              </el-descriptions-item>
+              <el-descriptions-item label="花期">
+                {{ res.bloomingPeriod }}
+              </el-descriptions-item>
+            </el-descriptions>
+
+            <!-- 三级信息 - 科普内容 -->
+            <div class="result-section-content">
+              <el-collapse accordion>
+                <el-collapse-item title="特征描述" :name="'description' + idx">
+                  <p class="content-text">{{ res.description }}</p>
+                </el-collapse-item>
+                <el-collapse-item title="养护方法" :name="'care' + idx">
+                  <p class="content-text">{{ res.careGuide }}</p>
+                </el-collapse-item>
+                <el-collapse-item title="花语文化" :name="'language' + idx">
+                  <p class="content-text">{{ res.flowerLanguage }}</p>
+                </el-collapse-item>
+              </el-collapse>
+            </div>
+
+            <!-- 操作按钮区 -->
+            <div class="result-actions">
+              <el-button class="action-btn" :icon="Star" circle @click="toggleFavorite(res)" />
+              <el-button class="action-btn" :icon="Share" circle @click="shareResult(res)" />
+              <el-button
+                type="primary"
+                class="btn-qa"
+                :icon="ChatDotRound"
+                @click="goToQA(res)"
+              >
+                发起问答
+              </el-button>
             </div>
           </div>
         </div>
-
-        <!-- 右侧：识别信息区 -->
-        <div class="result-right">
-          <!-- 一级信息 -->
-          <div class="result-section-primary">
-            <h2 class="flower-name">{{ result.name }}</h2>
-            <p class="flower-family">{{ result.family }}</p>
-          </div>
-
-          <!-- 二级信息 -->
-          <el-descriptions :column="1" border class="result-descriptions">
-            <el-descriptions-item label="颜色特征">
-              {{ result.color }}
-            </el-descriptions-item>
-            <el-descriptions-item label="花期">
-              {{ result.bloomingPeriod }}
-            </el-descriptions-item>
-          </el-descriptions>
-
-          <!-- 三级信息 - 科普内容 -->
-          <div class="result-section-content">
-            <el-collapse v-model="activeCollapse" accordion>
-              <el-collapse-item title="特征描述" name="description">
-                <p class="content-text">{{ result.description }}</p>
-              </el-collapse-item>
-              <el-collapse-item title="养护方法" name="care">
-                <p class="content-text">{{ result.careGuide }}</p>
-              </el-collapse-item>
-              <el-collapse-item title="花语文化" name="language">
-                <p class="content-text">{{ result.flowerLanguage }}</p>
-              </el-collapse-item>
-            </el-collapse>
-          </div>
-
-          <!-- 操作按钮区 -->
-          <div class="result-actions">
-            <el-button class="action-btn" :icon="Star" circle @click="toggleFavorite" />
-            <el-button class="action-btn" :icon="Share" circle @click="shareResult" />
-            <el-button
-              type="primary"
-              class="btn-qa"
-              :icon="ChatDotRound"
-              @click="goToQA"
-            >
-              发起问答
-            </el-button>
-          </div>
-        </div>
-      </div>
-    </el-card>
+      </el-card>
+    </div>
   </div>
 </template>
 
@@ -156,13 +164,13 @@ import { api } from '../api/config'
 
 const router = useRouter()
 const uploadRef = ref<UploadInstance>()
-const previewUrl = ref('')
+const fileList = ref<any[]>([])
+const previewUrls = ref<string[]>([])
 const identifying = ref(false)
-const currentFile = ref<File | null>(null)
 const activeCollapse = ref('')
 const isFavorite = ref(false)
 
-const result = ref<{
+interface RecognitionResult {
   name: string
   family: string
   color: string
@@ -171,142 +179,122 @@ const result = ref<{
   careGuide: string
   flowerLanguage: string
   confidence: number
-} | null>(null)
+  imagePreview?: string
+}
 
-const handleFileChange: UploadProps['onChange'] = (uploadFile) => {
+const results = ref<RecognitionResult[]>([])
+
+const handleFileChange: UploadProps['onChange'] = (uploadFile, uploadFiles) => {
   if (uploadFile.raw) {
     const file = uploadFile.raw
 
     // 验证文件类型
     const validTypes = ['image/jpeg', 'image/png', 'image/jpg']
     if (!validTypes.includes(file.type)) {
-      ElMessage({
-        message: '请上传JPG/PNG格式的图片',
-        type: 'error',
-        duration: 3000
-      })
-      uploadRef.value?.clearFiles()
+      ElMessage.error('请上传JPG/PNG格式的图片')
       return
     }
 
     // 验证文件大小
     if (file.size > 5 * 1024 * 1024) {
-      ElMessage({
-        message: '图片过大，请压缩后上传',
-        type: 'error',
-        duration: 3000
-      })
-      uploadRef.value?.clearFiles()
+      ElMessage.error('图片过大，请压缩后上传')
       return
     }
 
-    currentFile.value = file
-    previewUrl.value = URL.createObjectURL(file)
-    result.value = null
+    previewUrls.value.push(URL.createObjectURL(file))
+    fileList.value.push(uploadFile)
+    results.value = []
   }
 }
 
+const removeFile = (index: number) => {
+  previewUrls.value.splice(index, 1)
+  fileList.value.splice(index, 1)
+}
+
 const identifyFlower = async () => {
-  if (!currentFile.value) {
+  if (fileList.value.length === 0) {
     ElMessage.warning('请先上传图片')
     return
   }
 
   identifying.value = true
+  results.value = []
 
   try {
     const formData = new FormData()
-    formData.append('file', currentFile.value)
-
     const token = localStorage.getItem('access_token')
-    const response = await axios.post(api.identify, formData, {
+    
+    let apiUrl = api.identify
+    if (fileList.value.length > 1) {
+      apiUrl = api.identify.replace('/identify', '/batch-identify')
+      fileList.value.forEach(file => {
+        formData.append('files', file.raw)
+      })
+    } else {
+      formData.append('file', fileList.value[0].raw)
+    }
+
+    const response = await axios.post(apiUrl, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
         ...(token ? { Authorization: `Bearer ${token}` } : {})
       }
     })
 
-    result.value = response.data
-    ElMessage.success('识别成功！')
+    if (fileList.value.length > 1) {
+      results.value = response.data.results
+    } else {
+      results.value = [response.data]
+    }
+    
+    ElMessage.success('识别完成！')
   } catch (error) {
     console.error('识别失败:', error)
-    if (axios.isAxiosError(error)) {
-      ElMessage.error(`API调用失败: ${error.message}`)
-    } else {
-      ElMessage.error('识别失败，请稍后重试')
-    }
+    ElMessage.error('识别过程中出现错误，请稍后重试')
   } finally {
     identifying.value = false
   }
 }
 
 const resetUpload = () => {
-  previewUrl.value = ''
-  currentFile.value = null
-  result.value = null
+  previewUrls.value = []
+  fileList.value = []
+  results.value = []
   uploadRef.value?.clearFiles()
 }
 
-const goToQA = () => {
+const goToQA = (res: RecognitionResult) => {
   router.push({
     path: '/hua-shi-jie/qa',
-    query: { flower: result.value?.name }
+    query: { flower: res.name }
   })
 }
 
-const toggleFavorite = () => {
-  if (!result.value) return
-
-  isFavorite.value = !isFavorite.value
-
+const toggleFavorite = (res: RecognitionResult) => {
   // 保存收藏到本地存储
   const favorites = JSON.parse(localStorage.getItem('favorites') || '[]')
   const favoriteItem = {
     id: Date.now(),
-    name: result.value.name,
-    family: result.value.family,
-    color: result.value.color,
-    bloomingPeriod: result.value.bloomingPeriod,
-    description: result.value.description,
+    ...res,
     timestamp: Date.now()
   }
 
-  if (isFavorite.value) {
-    // 添加收藏
-    const exists = favorites.some((f: any) => f.name === favoriteItem.name)
-    if (!exists) {
-      favorites.push(favoriteItem)
-      localStorage.setItem('favorites', JSON.stringify(favorites))
-    }
-    ElMessage.success(`已将${result.value.name}添加到收藏`)
+  const index = favorites.findIndex((f: any) => f.name === res.name)
+  if (index === -1) {
+    favorites.push(favoriteItem)
+    localStorage.setItem('favorites', JSON.stringify(favorites))
+    ElMessage.success(`已将${res.name}添加到收藏`)
   } else {
-    // 取消收藏
-    const updated = favorites.filter((f: any) => f.name !== favoriteItem.name)
-    localStorage.setItem('favorites', JSON.stringify(updated))
-    ElMessage.success(`已取消${result.value.name}的收藏`)
+    favorites.splice(index, 1)
+    localStorage.setItem('favorites', JSON.stringify(favorites))
+    ElMessage.success(`已取消${res.name}的收藏`)
   }
 }
 
-const shareResult = () => {
-  if (!result.value) return
-
-  // 创建分享文本
-  const shareText = `我刚刚识别出了一朵${result.value.name}！\n${result.value.family} | ${result.value.color}\n${result.value.description}\n\n快来试试智能花卉识别系统吧！`
-
-  // 尝试使用Web Share API
-  if (navigator.share) {
-    navigator.share({
-      title: '智能花卉识别',
-      text: shareText,
-      url: window.location.href
-    }).catch((error) => {
-      console.log('分享失败:', error)
-      copyToClipboard(shareText)
-    })
-  } else {
-    // 降级方案：复制到剪贴板
-    copyToClipboard(shareText)
-  }
+const shareResult = (res: RecognitionResult) => {
+  const shareText = `我刚刚识别出了一朵${res.name}！\n${res.family} | ${res.color}\n${res.description}\n\n快来试试智能花卉识别系统吧！`
+  copyToClipboard(shareText)
 }
 
 const copyToClipboard = (text: string) => {
@@ -419,28 +407,33 @@ const triggerFileUpload = () => {
   border-color: #43A047;
 }
 
-.preview-section {
-  margin-top: 32px;
+.preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 16px;
+  margin-top: 20px;
 }
 
-.preview-container {
-  position: relative;
-  display: inline-block;
-  max-width: 100%;
-  margin: 0 auto;
+.preview-image-small {
+  width: 100%;
+  height: 150px;
+  border-radius: 8px;
+  object-fit: cover;
 }
 
-.preview-image {
-  max-width: 100%;
-  max-height: 500px;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.delete-btn {
+.delete-btn-small {
   position: absolute;
-  top: -16px;
-  right: -16px;
+  top: -8px;
+  right: -8px;
+  z-index: 10;
+}
+
+.results-list {
+  margin-top: 40px;
+}
+
+.result-card {
+  margin-bottom: 24px;
 }
 
 .action-buttons {
@@ -467,7 +460,7 @@ const triggerFileUpload = () => {
 .btn-primary {
   background-color: #4CAF50;
   border-color: #4CAF50;
-  color: white;
+  color: white !important;
   border-radius: 10px;
   font-family: 'Roboto', sans-serif;
   font-weight: 700;

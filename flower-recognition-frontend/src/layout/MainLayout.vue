@@ -14,7 +14,6 @@
           <el-menu-item index="/hua-shi-jie/qa">智能问答</el-menu-item>
           <el-menu-item index="/hua-shi-jie/history">历史记录</el-menu-item>
           <el-menu-item index="/hua-shi-jie/profile">个人中心</el-menu-item>
-          <el-menu-item index="/hua-shi-jie/friends">好友</el-menu-item>
         </el-menu>
       </div>
     </el-header>
