@@ -122,7 +122,7 @@ const doReset = ()=>{
         password: form.password,
       },(message)=>{
         ElMessage.success(message)
-        router.push('/hua-shi-jie/')
+        router.push('/')
       })
     }else {
       ElMessage.warning('请填写新的密码')
@@ -172,7 +172,7 @@ const doReset = ()=>{
           <el-button @click="startReset()" style="width: 200px;" type="danger" plain>开始重置密码</el-button>
         </div>
         <div style="margin-top: 20px">
-          <el-link type="primary" style="translate: 0 -2px" @click="router.push('/hua-shi-jie/')">返回登录</el-link>
+          <el-link type="primary" style="translate: 0 -2px" @click="router.push('/')">返回登录</el-link>
         </div>
       </div>
     </transition>
@@ -232,7 +232,7 @@ const doReset = ()=>{
           <el-button @click="doReset()" style="width: 200px;" type="danger" plain>立即重置密码</el-button>
         </div>
         <div style="margin-top: 20px">
-          <el-link type="primary" style="translate: 0 -2px" @click="router.push('/hua-shi-jie/')">返回登录</el-link>
+          <el-link type="primary" style="translate: 0 -2px" @click="router.push('/')">返回登录</el-link>
         </div>
       </div>
     </transition>

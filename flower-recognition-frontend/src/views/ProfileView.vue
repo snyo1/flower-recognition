@@ -20,8 +20,9 @@
                 <el-icon :size="50"><User /></el-icon>
               </el-avatar>
             </div>
-            <h2 class="user-name">{{ store.auth.user?.username || '未登录用户' }}</h2>
-            <p class="user-phone">{{ store.auth.user?.email || '未绑定邮箱' }}</p>
+            <h2 class="user-name">{{ userInfo.nickname || store.auth.user?.username || '未登录用户' }}</h2>
+            <p class="user-email">{{ store.auth.user?.email || '未绑定邮箱' }}</p>
+            <p class="user-bio">{{ userInfo.bio }}</p>
 
             <el-divider />
 
@@ -117,8 +118,7 @@
             layout="prev, pager, next"
             :total="filteredFavorites.length"
             :page-size="pageSize"
-            :current-page="currentPage"
-            @current-change="(p:number)=> currentPage = p"
+            v-model:current-page="currentPage"
           />
         </div>
       </el-col>
@@ -154,10 +154,6 @@
           <el-input v-model="editForm.nickname" placeholder="请输入昵称" />
         </el-form-item>
 
-        <el-form-item label="手机号" prop="phone">
-          <el-input v-model="editForm.phone" placeholder="请输入手机号" />
-        </el-form-item>
-
         <el-form-item label="个人简介">
           <el-input
             v-model="editForm.bio"
@@ -179,10 +175,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { useStore } from '@/stores'
+import { get, post, del } from '@/net'
 import axios from 'axios'
 import {
   User,
@@ -202,7 +199,6 @@ const store = useStore()
 interface UserInfo {
   avatar: string
   nickname: string
-  phone: string
   bio: string
   recognitionCount: number
   favoritesCount: number
@@ -222,7 +218,6 @@ interface FavoriteItem {
 const userInfo = ref<UserInfo>({
   avatar: '',
   nickname: '',
-  phone: '',
   bio: '热爱花卉，享受自然',
   recognitionCount: 0,
   favoritesCount: 0,
@@ -231,52 +226,16 @@ const userInfo = ref<UserInfo>({
 
 const favorites = ref<FavoriteItem[]>([])
 
-const pageSize = 8
-let currentPage = 1
-const pagedFavorites = computed(() => {
-  const start = (currentPage - 1) * pageSize
-  return filteredFavorites.value.slice(start, start + pageSize)
-})
-
-const tokenHeader = () => {
-  const token = localStorage.getItem('access_token')
-  return token ? { Authorization: `Bearer ${token}` } : {}
-}
-
-const loadStats = () => {
-  axios.get('/api/user/stats', { headers: tokenHeader() }).then(({data}) => {
-    userInfo.value.recognitionCount = data.recognitionCount
-    userInfo.value.favoritesCount = data.favoritesCount
-    userInfo.value.qaCount = data.qaCount
-  })
-}
-
-const loadFavorites = () => {
-  axios.get('/api/favorites/list', { headers: tokenHeader() }).then(({data}) => {
-    favorites.value = data.map((d:any) => ({
-      id: d.flower_id,
-      name: d.name,
-      family: d.family,
-      color: d.color,
-      bloomingPeriod: d.bloomingPeriod,
-      description: d.description,
-      timestamp: Date.parse(d.timestamp),
-    }))
-  })
-}
-
-loadStats()
-loadFavorites()
-
 const searchFavorite = ref('')
 const editProfileDialog = ref(false)
 const saving = ref(false)
 const profileFormRef = ref<FormInstance>()
+const currentPage = ref(1)
+const pageSize = 8
 
 const editForm = ref({
   avatar: '',
   nickname: '',
-  phone: '',
   bio: ''
 })
 
@@ -284,9 +243,6 @@ const profileRules: FormRules = {
   nickname: [
     { required: true, message: '请输入昵称', trigger: 'blur' },
     { min: 2, max: 20, message: '昵称长度在 2 到 20 个字符', trigger: 'blur' }
-  ],
-  phone: [
-    { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号', trigger: 'blur' }
   ]
 }
 
@@ -299,6 +255,62 @@ const filteredFavorites = computed(() => {
     flower.name.toLowerCase().includes(keyword) ||
     flower.family.toLowerCase().includes(keyword)
   )
+})
+
+const pagedFavorites = computed(() => {
+  const start = (currentPage.value - 1) * pageSize
+  return filteredFavorites.value.slice(start, start + pageSize)
+})
+
+const tokenHeader = () => {
+  const token = localStorage.getItem('access_token')
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
+const loadStats = () => {
+  get('/api/user/stats', (data) => {
+    userInfo.value.recognitionCount = data.recognitionCount
+    userInfo.value.favoritesCount = data.favoritesCount
+    userInfo.value.qaCount = data.qaCount
+  })
+}
+
+const loadFavorites = () => {
+  get('/api/favorites/list', (data) => {
+    favorites.value = data.map((d:any) => ({
+      id: d.flower_id,
+      name: d.name,
+      family: d.family,
+      color: d.color,
+      bloomingPeriod: d.bloomingPeriod,
+      description: d.description,
+      timestamp: Date.parse(d.timestamp),
+    }))
+  })
+}
+
+const loadUserInfo = () => {
+  get('api/user/me', (data) => {
+    store.auth.user = data
+    userInfo.value.nickname = data.username
+    userInfo.value.avatar = '' // 默认头像
+    userInfo.value.bio = '热爱花卉，享受自然'
+  })
+}
+
+loadUserInfo()
+loadStats()
+loadFavorites()
+
+// 监听对话框打开，初始化编辑表单
+watch(() => editProfileDialog.value, (val) => {
+  if (val) {
+    editForm.value = {
+      avatar: userInfo.value.avatar,
+      nickname: userInfo.value.nickname,
+      bio: userInfo.value.bio
+    }
+  }
 })
 
 const formatFavoriteTime = (timestamp: number) => {
@@ -329,7 +341,7 @@ const logout = async () => {
     localStorage.removeItem('access_token')
     store.auth.user = null
     ElMessage.success('已退出登录')
-    router.push('/hua-shi-jie/')
+    router.push('/')
   } catch {
     // 用户取消
   }
@@ -349,18 +361,21 @@ const saveProfile = async () => {
   await profileFormRef.value.validate((valid) => {
     if (valid) {
       saving.value = true
+      // 模拟后端保存，实际更新本地状态
       setTimeout(() => {
-        userInfo.value = {
-          ...userInfo.value,
-          avatar: editForm.value.avatar || userInfo.value.avatar,
-          nickname: editForm.value.nickname,
-          phone: editForm.value.phone,
-          bio: editForm.value.bio
+        userInfo.value.avatar = editForm.value.avatar || userInfo.value.avatar
+        userInfo.value.nickname = editForm.value.nickname
+        userInfo.value.bio = editForm.value.bio
+        
+        // 同步更新 store 中的用户名（用于全局显示）
+        if (store.auth.user) {
+          store.auth.user.username = editForm.value.nickname
         }
+        
         saving.value = false
         editProfileDialog.value = false
         ElMessage.success('个人信息已更新')
-      }, 1000)
+      }, 500)
     }
   })
 }
@@ -371,7 +386,7 @@ const viewDetail = (flower: FavoriteItem) => {
 
 const askQuestion = (flower: FavoriteItem) => {
   router.push({
-    path: '/hua-shi-jie/qa',
+    path: '/qa',
     query: { flower: flower.name }
   })
 }
@@ -387,9 +402,11 @@ const removeFavorite = async (id: number) => {
         type: 'warning'
       }
     )
-    favorites.value = favorites.value.filter(f => f.id !== id)
-    userInfo.value.favoritesCount--
-    ElMessage.success('已取消收藏')
+    del(`/api/favorites/remove/${id}`, () => {
+      favorites.value = favorites.value.filter(f => f.id !== id)
+      userInfo.value.favoritesCount--
+      ElMessage.success('已取消收藏')
+    })
   } catch {
     // 用户取消
   }
@@ -438,7 +455,13 @@ const removeFavorite = async (id: number) => {
 .settings-card,
 .favorites-card {
   margin-bottom: 24px;
-  max-height: 720px;
+  height: 720px;
+  display: flex;
+  flex-direction: column;
+}
+
+:deep(.el-card__body) {
+  flex: 1;
   overflow-y: auto;
 }
 
@@ -483,10 +506,18 @@ const removeFavorite = async (id: number) => {
   margin: 0;
 }
 
-.user-phone {
+.user-email {
   font-size: 14px;
   color: #666666;
   margin: 0;
+}
+
+.user-bio {
+  font-size: 14px;
+  color: #888888;
+  margin-top: 8px;
+  text-align: center;
+  max-width: 80%;
 }
 
 .stats-section {

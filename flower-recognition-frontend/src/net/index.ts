@@ -61,4 +61,24 @@ function post(url: string, data: any, success: (data: any) => void, failure: (me
     internalPost(url, data, accessHeader(), success, failure);
 }
 
-export { get, post }
+function internalDelete(url: string, header: any, success: (data: any) => void, failure: (message: string, status: number, url: string) => void = defaultFailure, error: (err: any) => void = defaultError) {
+    axios.delete(url, { headers: header }).then(({ data, status }) => {
+        if (status === 200) {
+            success(data);
+        } else {
+            failure(data.detail || "请求失败", status, url);
+        }
+    }).catch(err => {
+        if(err.response) {
+            failure(err.response.data.detail || "请求失败", err.response.status, url);
+        } else {
+            error(err);
+        }
+    });
+}
+
+function del(url: string, success: (data: any) => void, failure: (message: string, status: number, url: string) => void = defaultFailure) {
+    internalDelete(url, accessHeader(), success, failure);
+}
+
+export { get, post, del }

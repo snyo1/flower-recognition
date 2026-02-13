@@ -499,7 +499,7 @@ const viewDetail = (flower: Flower) => {
 // 发起问答
 const startQA = (flower: Flower) => {
   router.push({
-    path: '/hua-shi-jie/qa',
+    path: '/qa',
     query: { flower: flower.name }
   })
   detailVisible.value = false
@@ -818,6 +818,7 @@ const submitFeedback = () => {
   margin: 0 0 16px 0;
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;

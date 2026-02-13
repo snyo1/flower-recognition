@@ -128,7 +128,7 @@ onUnmounted(() => {
       <!-- 左侧文字 -->
       <div class="welcome-title">
         <div class="title-main">欢迎来到花世界</div>
-        <div class="title-sub">这是一个基于FastAPI+Vue3的花卉识别与科普平台</div>
+        <div class="title-sub">这是一个花卉识别与科普平台</div>
         <div class="title-quote">——发现自然之美，探索植物奥秘</div>
       </div>
 

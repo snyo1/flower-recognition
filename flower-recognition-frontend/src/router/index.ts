@@ -1,11 +1,12 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useStore } from '@/stores/index'
+import { get } from '@/net'
 
 const router = createRouter({
-  history: createWebHistory('/hua-shi-jie/'),
+  history: createWebHistory(),
   routes: [
     {
-      path: '/hua-shi-jie/',
+      path: '/',
       name: 'welcome',
       component: () => import('@/views/WelcomeView.vue'),
       children: [
@@ -25,7 +26,7 @@ const router = createRouter({
       ]
     },
     {
-      path: '/hua-shi-jie/index',
+      path: '/index',
       component: () => import('@/layout/MainLayout.vue'),
       children: [
         {
@@ -36,7 +37,7 @@ const router = createRouter({
       ]
     },
     {
-      path: '/hua-shi-jie/qa',
+      path: '/qa',
       component: () => import('@/layout/MainLayout.vue'),
       children: [
         {
@@ -47,7 +48,7 @@ const router = createRouter({
       ]
     },
     {
-      path: '/hua-shi-jie/knowledge',
+      path: '/knowledge',
       component: () => import('@/layout/MainLayout.vue'),
       children: [
         {
@@ -58,7 +59,7 @@ const router = createRouter({
       ]
     },
     {
-      path: '/hua-shi-jie/history',
+      path: '/history',
       component: () => import('@/layout/MainLayout.vue'),
       children: [
         {
@@ -69,7 +70,7 @@ const router = createRouter({
       ]
     },
     {
-      path: '/hua-shi-jie/profile',
+      path: '/profile',
       component: () => import('@/layout/MainLayout.vue'),
       children: [
         {
@@ -82,38 +83,53 @@ const router = createRouter({
     {
       path: '/:pathMatch(.*)*',
       name: 'not-found',
-      component: () => import('@/views/WelcomeView.vue') // Reusing welcome view or any view, logic will be in beforeEach
+      redirect: (to) => {
+        const store = useStore()
+        return store.auth.user ? '/index' : '/'
+      }
     }
   ],
 })
 
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   const store = useStore()
   const token = localStorage.getItem('access_token')
-  const isAuthed = !!(store.auth.user || token)
 
-  // 1. 如果请求的是不存在的页面 (not-found 路由)
-  if (to.name === 'not-found') {
-    if (isAuthed) {
-      return next('/hua-shi-jie/index')
-    } else {
-      return next('/hua-shi-jie/')
+  // 如果 store 中没有用户信息但有 token，尝试初始化用户信息
+  if (!store.auth.user && token) {
+    try {
+      // 这里的 get 是自定义的封装，它会自动带上 token
+      await new Promise((resolve, reject) => {
+        get('api/user/me', (data) => {
+          store.auth.user = data
+          resolve(data)
+        }, (msg, status) => {
+          if (status === 401) {
+            localStorage.removeItem('access_token')
+          }
+          reject(msg)
+        })
+      })
+    } catch (e) {
+      console.error('Failed to initialize user info:', e)
     }
   }
 
-  // 2. 访问登录/注册相关页面
-  const isWelcomePage = to.path === '/hua-shi-jie/' || to.path.startsWith('/hua-shi-jie/register') || to.path.startsWith('/hua-shi-jie/forget')
+  const isAuthed = !!(store.auth.user)
+
+  // 1. 访问登录/注册相关页面
+  const isWelcomePage = to.path === '/' || to.path.startsWith('/register') || to.path.startsWith('/forget')
   
   if (isWelcomePage) {
     if (isAuthed) {
-      return next('/hua-shi-jie/index')
+      return next('/index')
     }
     return next()
   }
 
-  // 3. 访问受保护页面 (非登录/注册页面)
+  // 2. 访问受保护页面 (非登录/注册页面)
   if (!isAuthed) {
-    return next('/hua-shi-jie/')
+    return next('/')
   }
 
   return next()

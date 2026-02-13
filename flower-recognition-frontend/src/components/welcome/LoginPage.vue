@@ -25,7 +25,7 @@ const login = () => {
       ElMessage.success(message)
       get('api/user/me',(message)=>{
         store.auth.user = message
-        router.push('/hua-shi-jie/index')
+        router.push('/index')
       },()=>{
         store.auth.user = null
       })
@@ -53,7 +53,7 @@ const login = () => {
       </el-col>
 
       <el-col :span="12" style="text-align: right">
-        <el-link @click="router.push('/hua-shi-jie/forget')">忘记密码？</el-link>
+        <el-link @click="router.push('/forget')">忘记密码？</el-link>
       </el-col>
     </el-row>
 
@@ -61,10 +61,10 @@ const login = () => {
       <el-button @click="login()" style="width: 200px" type="success" plain>立即登录</el-button>
     </div>
     <el-divider>
-      <span style="color: gray;font-size: 13px;background-color: antiquewhite;padding: 0">没有账号</span>
+      <span style="color: gray;font-size: 13px;background-color: white;padding: 0">没有账号</span>
     </el-divider>
     <div>
-      <el-button style="width: 200px" @click="router.push('/hua-shi-jie/register')" type="warning" plain>注册账号</el-button>
+      <el-button style="width: 200px" @click="router.push('/register')" type="warning" plain>注册账号</el-button>
     </div>
   </div>
 </template>
@@ -73,6 +73,6 @@ const login = () => {
 /* 覆盖 el-divider 文字部分的样式 */
 :deep(.el-divider__text) {
   padding: 10px !important;
-  background-color: antiquewhite !important;
+  background-color: white !important;
 }
 </style>

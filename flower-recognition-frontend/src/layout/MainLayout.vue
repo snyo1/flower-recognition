@@ -9,11 +9,11 @@
           class="app-menu"
           router
         >
-          <el-menu-item index="/hua-shi-jie/index">首页</el-menu-item>
-          <el-menu-item index="/hua-shi-jie/knowledge">知识库</el-menu-item>
-          <el-menu-item index="/hua-shi-jie/qa">智能问答</el-menu-item>
-          <el-menu-item index="/hua-shi-jie/history">历史记录</el-menu-item>
-          <el-menu-item index="/hua-shi-jie/profile">个人中心</el-menu-item>
+          <el-menu-item index="/index">首页</el-menu-item>
+          <el-menu-item index="/knowledge">知识库</el-menu-item>
+          <el-menu-item index="/qa">智能问答</el-menu-item>
+          <el-menu-item index="/history">历史记录</el-menu-item>
+          <el-menu-item index="/profile">个人中心</el-menu-item>
         </el-menu>
       </div>
     </el-header>
@@ -24,7 +24,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, RouterView, useRouter } from 'vue-router'
 import { useStore } from '@/stores'
 import { get } from '@/net'
@@ -32,20 +32,24 @@ import { get } from '@/net'
 const route = useRoute()
 const router = useRouter()
 const store = useStore()
-const activeMenu = ref('/hua-shi-jie/index')
+const activeMenu = ref('/index')
 
 const updateActiveMenu = () => {
   activeMenu.value = route.path
 }
 
-onMounted(() => {
+// 监听路由变化更新 activeMenu
+watch(() => route.path, () => {
   updateActiveMenu()
+}, { immediate: true })
+
+onMounted(() => {
   if (!store.auth.user) {
     get('/api/user/me', (data) => {
       store.auth.user = data
     }, () => {
       store.auth.user = null
-      router.push('/hua-shi-jie/')
+      router.push('/')
     })
   }
 })

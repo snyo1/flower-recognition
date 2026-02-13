@@ -266,7 +266,7 @@ const resetUpload = () => {
 
 const goToQA = (res: RecognitionResult) => {
   router.push({
-    path: '/hua-shi-jie/qa',
+    path: '/qa',
     query: { flower: res.name }
   })
 }
