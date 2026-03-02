@@ -15,6 +15,8 @@ class User(Base):
     email: Mapped[Optional[str]] = mapped_column(String(128), unique=True, index=True)
     role: Mapped[str] = mapped_column(Enum("user", "expert", "admin"), default="user")
     registration_date: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    # 个人资料（通过 profile 关联存储）
+    profile: Mapped[Optional["UserProfile"]] = relationship(back_populates="user", uselist=False)
 
     recognitions: Mapped[List["RecognitionRecord"]] = relationship(back_populates="user")
     comments: Mapped[List["Comment"]] = relationship(back_populates="user")
@@ -124,3 +126,15 @@ class QAHistory(Base):
     question: Mapped[str] = mapped_column(Text, nullable=False)
     answer: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+class UserProfile(Base):
+    __tablename__ = "user_profiles"
+    
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), unique=True, nullable=False)
+    avatar_url: Mapped[Optional[str]] = mapped_column(String(512))
+    nickname: Mapped[Optional[str]] = mapped_column(String(64))
+    bio: Mapped[Optional[str]] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    
+    user: Mapped["User"] = relationship(back_populates="profile")

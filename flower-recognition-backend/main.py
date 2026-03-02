@@ -116,10 +116,21 @@ class FeedbackAdmin(ModelView, model=Feedback):
     name = "反馈"
     name_plural = "用户反馈"
 
+class RecognitionAdmin(ModelView, model=RecognitionRecord):
+    column_list = [RecognitionRecord.id, RecognitionRecord.user_id, RecognitionRecord.plant_id, RecognitionRecord.confidence, RecognitionRecord.created_at]
+    name = "识别记录"
+    name_plural = "识别记录管理"
+
+class QAHistoryAdmin(ModelView, model=__import__("app.models.tables", fromlist=["QAHistory"]).QAHistory):
+    column_list = [__import__("app.models.tables", fromlist=["QAHistory"]).QAHistory.id, __import__("app.models.tables", fromlist=["QAHistory"]).QAHistory.user_id, __import__("app.models.tables", fromlist=["QAHistory"]).QAHistory.question, __import__("app.models.tables", fromlist=["QAHistory"]).QAHistory.created_at]
+    name = "问答记录"
+    name_plural = "问答记录管理"
 admin.add_view(UserAdmin)
 admin.add_view(FlowerAdmin)
 admin.add_view(CommentAdmin)
 admin.add_view(FeedbackAdmin)
+admin.add_view(RecognitionAdmin)
+admin.add_view(QAHistoryAdmin)
 
 
 @app.get("/api/health")

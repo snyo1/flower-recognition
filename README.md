@@ -1,220 +1,113 @@
-# 花世界
+# 花世界 - 智能花卉识别与科普系统
 
-## 智能花卉识别与科普系统
+基于大模型的智能花卉识别与科普系统，支持多模态花卉图片识别、深度科普信息生成、智能问答、知识库管理以及云端存储功能。
 
-基于大模型的智能花卉识别与科普系统，支持花卉图片识别、科普信息生成、智能问答和知识库管理功能。
+## 最新更新 (2024-03-02)
+- **多模态识别**: 集成多模态大模型 API，支持图片直接识别花卉种类、颜色和特征。
+- **MinIO 集成**: 所有上传的识别图片均自动持久化存储至 MinIO 私有云。
+- **首页重构**: 采用左侧上传、右侧结果的响应式布局，支持批量识别与滚动查看。
+- **历史记录**: 实现真实的识别与问答历史持久化，每个用户自动保留最近 10 条记录。
+- **后台完善**: 全面完善了知识库、用户、反馈、评论等模块的增删改查功能。
 
 ## 技术栈
 
 ### 前端
 - **框架**: Vue 3 + TypeScript
-- **UI组件库**: Element Plus
-- **路由**: Vue Router
-- **HTTP客户端**: Axios
+- **UI组件库**: Element Plus (核心组件响应式适配)
+- **状态管理**: Pinia
 - **构建工具**: Vite
 
 ### 后端
-- **框架**: FastAPI (Python)
-- **数据验证**: Pydantic
-- **CORS**: FastAPI CORS Middleware
+- **框架**: FastAPI (Python 3.8+)
+- **AI 引擎**: LangChain + DeepSeek-V3 / 多模态 Vision 模型
+- **数据库**: SQLAlchemy (支持异步操作)
+- **存储**: MinIO (对象存储)
+- **认证**: JWT (JSON Web Token)
 
 ## 项目结构
 
-```
-workspace/projects/
-├── .coze                          # 项目配置文件
-├── flower-recognition-frontend/    # 前端项目
+```text
+HuaShiJie/
+├── flower-recognition-frontend/     # 前端 Vue 3 项目
 │   ├── src/
-│   │   ├── views/                  # 页面组件
-│   │   │   ├── HomeView.vue       # 首页（花卉识别）
-│   │   │   ├── QAView.vue         # 智能问答
-│   │   │   ├── KnowledgeView.vue  # 知识库管理
-│   │   │   └── HistoryView.vue    # 历史记录
-│   │   ├── router/
-│   │   │   └── index.ts           # 路由配置
-│   │   ├── App.vue                # 根组件
-│   │   └── main.ts                # 入口文件
-│   ├── package.json
-│   └── vite.config.ts
-├── flower-recognition-backend/     # 后端项目
-│   ├── main.py                     # 应用入口
+│   │   ├── api/                     # 后端 API 调用封装
+│   │   ├── components/              # 通用业务组件
+│   │   ├── layout/                  # 页面布局组件
+│   │   ├── router/                  # 路由配置 (含导航守卫)
+│   │   ├── stores/                  # Pinia 状态管理
+│   │   └── views/                   # 页面视图 (首页、识别、问答等)
+│   └── vite.config.ts               # Vite 配置文件
+├── flower-recognition-backend/      # 后端 FastAPI 项目
 │   ├── app/
-│   │   ├── api/                    # API路由
-│   │   │   ├── flower.py          # 花卉识别接口
-│   │   │   ├── qa.py              # 智能问答接口
-│   │   │   └── knowledge.py       # 知识库接口
-│   │   └── models/
-│   │       └── schemas.py         # 数据模型
-│   └── requirements.txt
-└── README.md
+│   │   ├── api/                     # 业务路由接口
+│   │   ├── core/                    # 核心配置与安全逻辑
+│   │   ├── models/                  # 数据库表与 Schema 定义
+│   │   └── services/                # AI、存储、数据库等核心服务
+│   ├── main.py                      # 后端应用启动入口
+│   └── requirements.txt             # 项目依赖列表
+└── README.md                        # 项目说明文档
 ```
 
 ## 核心功能
 
-### 1. 花卉图片识别
-- 支持上传花卉图片进行识别
-- 显示识别结果：花卉名称、科属分类、特征描述等
-- 支持批量图片识别（预留接口）
+### 1. 智能花卉识别
+- **多模态分析**: 自动识别图片中的花卉名称、科属、颜色、花期等。
+- **批量处理**: 支持一次上传多张图片进行并发识别。
+- **置信度评分**: AI 自动计算识别结果的置信度。
 
-### 2. 花卉科普信息生成
-- 基于识别结果生成科普信息
-- 包括：生长习性、养护方法、浇水施肥要求、病虫害防治等
-- 提供花语和文化内涵信息
+### 2. 深度科普生成
+- **全方位信息**: 包含特征描述、专业养护方法（光照、水分、施肥）、花语文化。
+- **交互式查看**: 结果以折叠面板形式展现，保持界面简洁。
 
-### 3. 智能问答
-- 支持自然语言提问
-- 支持多轮对话
-- 记录问答历史
-- 快速问答标签
+### 3. 智能问答 (AI Chat)
+- **上下文感知**: 支持基于识别结果的深度追问。
+- **历史回溯**: 自动保存用户最近的问答足迹。
 
-### 4. 花卉知识库管理
-- 增删改查功能
-- 关键词搜索
-- 数据验证
+### 4. 知识库与社区
+- **全局搜索**: 快速检索各类花卉知识。
+- **互动评论**: 用户可对花卉知识进行评论和点赞。
+- **收藏夹**: 跨设备同步用户喜爱的花卉。
 
-### 5. 识别历史记录
-- 查看历史识别记录
-- 查看详细信息
-- 删除历史记录
+## 配置说明
 
-## API接口文档
-
-### 基础接口
-
-#### 健康检查
-```
-GET /health
+### 1. 环境变量 (.env)
+```env
+DATABASE_URL=sqlite+aiosqlite:///./test.db
+SECRET_KEY=你的JWT密钥
+DEEPSEEK_API_KEY=你的DeepSeek_API_KEY
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+ZHIPU_API_KEY=你的智谱AI_API_KEY
 ```
 
-### 花卉识别接口
-
-#### 识别花卉
-```
-POST /api/flower/identify
-Content-Type: multipart/form-data
-
-参数:
-- file: 图片文件
-
-响应:
-{
-  "name": "月季花",
-  "family": "蔷薇科",
-  "color": "红色、粉色、黄色等",
-  "bloomingPeriod": "5月-10月",
-  "description": "...",
-  "careGuide": "...",
-  "flowerLanguage": "...",
-  "confidence": 95.5
-}
+### 2. MinIO 配置 (config.py)
+```python
+MINIO_ENDPOINT="192.168.42.101:9000"
+MINIO_ACCESS_KEY="minioadmin"
+MINIO_SECRET_KEY="minioadmin"
+MINIO_BUCKET="flower-images"
 ```
 
-### 智能问答接口
+## 推荐模型建议
 
-#### 问答
-```
-POST /api/qa/chat
-Content-Type: application/json
-
-请求体:
-{
-  "question": "如何浇水？",
-  "history": []
-}
-
-响应:
-{
-  "answer": "浇水要根据土壤干湿情况来决定..."
-}
-```
-
-### 知识库接口
-
-#### 获取所有花卉知识
-```
-GET /api/knowledge/?keyword=搜索关键词
-```
-
-#### 添加花卉知识
-```
-POST /api/knowledge/
-Content-Type: application/json
-
-请求体:
-{
-  "name": "月季",
-  "family": "蔷薇科",
-  "color": "红色、粉色、黄色等",
-  "bloomingPeriod": "5月-10月",
-  "description": "...",
-  "careGuide": "...",
-  "flowerLanguage": "..."
-}
-```
-
-#### 更新花卉知识
-```
-PUT /api/knowledge/{flower_id}
-```
-
-#### 删除花卉知识
-```
-DELETE /api/knowledge/{flower_id}
-```
+对于**花卉识别 (Vision)** 任务，项目已默认接入：
+1. **智谱 AI (GLM-4.6V)**: 接入 `zai-sdk` 实现高精度的多模态花卉识别，支持思考过程（Thinking）输出。
+2. **DeepSeek-V3**: 用于处理文本科普生成与智能问答。
 
 ## 启动方式
 
-### 前端启动
+### 前端
 ```bash
 cd flower-recognition-frontend
 npm install
 npm run dev
 ```
 
-### 后端启动
+### 后端
 ```bash
 cd flower-recognition-backend
 pip install -r requirements.txt
-python -m uvicorn main:app 
+python -m uvicorn main:app --reload
 ```
-
-## 环境变量
-
-创建 `.env` 文件（如需要）：
-```
-# 后端配置
-API_KEY=your_api_key
-DATABASE_URL=postgresql://user:password@localhost/dbname
-```
-
-## 开发说明
-
-### 前端开发
-1. 修改代码后，Vite 会自动热更新
-2. 访问 http://localhost:5173 查看前端页面
-
-### 后端开发
-1. 修改代码后，需要重启后端服务
-2. 访问 http://localhost:8000/docs 查看API文档（Swagger UI）
-3. 访问 http://localhost:8000/health 检查服务状态
-
-## 后续优化方向
-
-1. **大模型集成**: 集成真实的大模型API，替换模拟数据
-2. **数据库集成**: 使用PostgreSQL存储知识库和历史记录
-3. **对象存储**: 使用对象存储服务管理图片文件
-4. **用户认证**: 添加用户登录和权限管理
-5. **批量识别**: 实现批量图片识别功能
-6. **流式响应**: 实现智能问答的流式输出
-7. **性能优化**: 缓存、CDN、图片压缩等
-
-## 注意事项
-
-1. 当前版本使用模拟数据，大模型集成需要配置相应的API Key
-2. 前端运行在 5173 端口，后端运行在 8000 端口
-3. 已配置CORS，支持跨域请求
-4. 使用Element Plus组件库，确保样式正确加载
 
 ## 许可证
-
 MIT License

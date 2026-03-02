@@ -76,7 +76,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, onActivated, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Loading, Clock, Upload, Promotion } from '@element-plus/icons-vue'
@@ -112,9 +112,11 @@ const formatTime = (timestamp: number) => {
 
 const scrollToBottom = () => {
   nextTick(() => {
-    if (chatContainer.value) {
-      chatContainer.value.scrollTop = chatContainer.value.scrollHeight
-    }
+    setTimeout(() => {
+      if (chatContainer.value) {
+        chatContainer.value.scrollTop = chatContainer.value.scrollHeight
+      }
+    }, 50) // 给一点点延迟确保渲染完成
   })
 }
 
@@ -152,6 +154,10 @@ const sendMessage = async () => {
     const response = await axios.post(api.chat, {
       question: userQuestion,
       history: recentHistory
+    }, {
+      headers: {
+        ...(localStorage.getItem('access_token') ? { Authorization: `Bearer ${localStorage.getItem('access_token')}` } : {})
+      }
     })
 
     const assistantAnswer = response.data.answer
@@ -232,12 +238,57 @@ const uploadImage = () => {
   ElMessage.info('图片上传功能开发中')
 }
 
+const loadHistory = () => {
+  // 加载后端问答历史（已登录）或本地存储（未登录）
+  const token = localStorage.getItem('access_token')
+  const headers = token ? { Authorization: `Bearer ${token}` } : {}
+  axios.get('/api/qa/history', { headers }).then(({ data }) => {
+    // 将问答记录转换为对话消息（按时间降序返回，反向插入维持时间顺序）
+    if (Array.isArray(data) && data.length > 0) {
+      const pairs = data.slice().reverse()
+      const hist: Message[] = []
+      for (const p of pairs) {
+        hist.push({ role: 'user', content: p.question, timestamp: Date.parse(p.created_at) })
+        hist.push({ role: 'assistant', content: p.answer || '', timestamp: Date.parse(p.created_at) })
+      }
+      messages.value = hist
+      scrollToBottom()
+    } else {
+      // 后端无记录时回退到本地最近记录
+      const qaRecords = JSON.parse(localStorage.getItem('qaRecords') || '[]')
+      const hist: Message[] = []
+      for (const r of qaRecords.reverse()) {
+        hist.push({ role: 'user', content: r.question, timestamp: r.timestamp })
+        hist.push({ role: 'assistant', content: r.answer, timestamp: r.timestamp })
+      }
+      messages.value = hist
+      scrollToBottom()
+    }
+  }).catch(() => {
+    // 未登录则读取本地存储
+    const qaRecords = JSON.parse(localStorage.getItem('qaRecords') || '[]')
+    const hist: Message[] = []
+    for (const r of qaRecords.reverse()) {
+      hist.push({ role: 'user', content: r.question, timestamp: r.timestamp })
+      hist.push({ role: 'assistant', content: r.answer, timestamp: r.timestamp })
+    }
+    messages.value = hist
+    scrollToBottom()
+  })
+}
+
 onMounted(() => {
   if (route.query.flower) {
     const flowerName = route.query.flower as string
     inputMessage.value = `请介绍一下${flowerName}的养护方法`
     sendMessage()
   }
+  loadHistory()
+})
+
+onActivated(() => {
+  loadHistory()
+  scrollToBottom()
 })
 </script>
 
@@ -252,7 +303,16 @@ onMounted(() => {
 .chat-card {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 104px);
+  height: calc(100vh - 120px); /* 稍微缩小一点高度，确保不超出主容器 */
+  overflow: hidden;
+}
+
+:deep(.el-card__body) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 16px 24px !important;
 }
 
 .card-header {
@@ -342,6 +402,7 @@ onMounted(() => {
   font-size: 17px;
   line-height: 1.7;
   margin-bottom: 6px;
+  white-space: pre-wrap; /* 保证换行符生效 */
 }
 
 .message-time {

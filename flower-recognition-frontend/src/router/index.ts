@@ -32,7 +32,8 @@ const router = createRouter({
         {
           path: '',
           name: 'index',
-          component: () => import('@/views/HomeView.vue')
+          component: () => import('@/views/HomeView.vue'),
+          meta: { keepAlive: true }
         }
       ]
     },
@@ -43,7 +44,8 @@ const router = createRouter({
         {
           path: '',
           name: 'qa',
-          component: () => import('@/views/QAView.vue')
+          component: () => import('@/views/QAView.vue'),
+          meta: { keepAlive: true }
         }
       ]
     },
@@ -54,7 +56,8 @@ const router = createRouter({
         {
           path: '',
           name: 'knowledge',
-          component: () => import('@/views/KnowledgeView.vue')
+          component: () => import('@/views/KnowledgeView.vue'),
+          meta: { keepAlive: true }
         }
       ]
     },
@@ -65,7 +68,8 @@ const router = createRouter({
         {
           path: '',
           name: 'history',
-          component: () => import('@/views/HistoryView.vue')
+          component: () => import('@/views/HistoryView.vue'),
+          meta: { keepAlive: true }
         }
       ]
     },
@@ -76,7 +80,8 @@ const router = createRouter({
         {
           path: '',
           name: 'profile',
-          component: () => import('@/views/ProfileView.vue')
+          component: () => import('@/views/ProfileView.vue'),
+          meta: { keepAlive: true }
         }
       ]
     },
@@ -100,7 +105,7 @@ router.beforeEach(async (to, from, next) => {
     try {
       // 这里的 get 是自定义的封装，它会自动带上 token
       await new Promise((resolve, reject) => {
-        get('api/user/me', (data) => {
+        get('/api/user/me', (data) => {
           store.auth.user = data
           resolve(data)
         }, (msg, status) => {

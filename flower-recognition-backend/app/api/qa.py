@@ -1,26 +1,17 @@
-from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi import APIRouter, HTTPException, Depends
 from ..models.schemas import QARequest, QAResponse
 from ..services.ai import generate_text
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from ..services.db import get_db
 from ..models.tables import QAHistory, User
-from jose import jwt
-from ..core.security import settings
+from .user import get_current_user, get_current_user_optional
 
 router = APIRouter(prefix="/api/qa", tags=["智能问答"])
 
 @router.post("/chat", response_model=QAResponse)
-async def chat(request: QARequest, req: Request, db: AsyncSession = Depends(get_db)):
+async def chat(request: QARequest, current_user: User | None = Depends(get_current_user_optional), db: AsyncSession = Depends(get_db)):
     try:
-        # 尝试获取当前用户
-        from .user import get_current_user
-        current_user = None
-        try:
-            current_user = await get_current_user(req)
-        except:
-            pass
-
         # 构造提示词和历史记录
         prompt = request.question
         history = request.history or []
@@ -29,10 +20,21 @@ async def chat(request: QARequest, req: Request, db: AsyncSession = Depends(get_
         ai_answer = generate_text(prompt, history=history)
         
         if ai_answer:
-            # 记录历史到数据库
+            # 记录历史到数据库（仅登录用户）
             if current_user:
                 row = QAHistory(user_id=current_user.id, question=request.question, answer=ai_answer)
                 db.add(row)
+                
+                # 限制最近10条
+                history_stmt = select(QAHistory).filter(QAHistory.user_id == current_user.id).order_by(QAHistory.created_at.desc())
+                history_res = await db.execute(history_stmt)
+                user_history = history_res.scalars().all()
+                if len(user_history) > 10:
+                    # 删除第11条及以后的记录
+                    ids_to_keep = [h.id for h in user_history[:10]]
+                    del_stmt = delete(QAHistory).filter(QAHistory.user_id == current_user.id, ~QAHistory.id.in_(ids_to_keep))
+                    await db.execute(del_stmt)
+                
                 await db.commit()
             return QAResponse(answer=ai_answer)
         
@@ -41,3 +43,29 @@ async def chat(request: QARequest, req: Request, db: AsyncSession = Depends(get_
         return QAResponse(answer=answer)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"问答失败: {str(e)}")
+
+@router.get("/history")
+async def get_qa_history(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    stmt = select(QAHistory).filter(QAHistory.user_id == current_user.id).order_by(QAHistory.created_at.desc()).limit(10)
+    result = await db.execute(stmt)
+    rows = result.scalars().all()
+    return [
+        {
+            "id": row.id,
+            "question": row.question,
+            "answer": row.answer,
+            "created_at": row.created_at.isoformat()
+        }
+        for row in rows
+    ]
+
+@router.delete("/history/{history_id}")
+async def delete_qa_history(history_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    stmt = select(QAHistory).filter(QAHistory.id == history_id, QAHistory.user_id == current_user.id)
+    result = await db.execute(stmt)
+    row = result.scalars().first()
+    if not row:
+        raise HTTPException(status_code=404, detail="记录不存在")
+    await db.delete(row)
+    await db.commit()
+    return {"message": "删除成功"}

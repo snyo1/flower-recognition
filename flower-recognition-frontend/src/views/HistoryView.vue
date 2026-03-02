@@ -223,71 +223,10 @@ interface QAItem {
   timestamp: number
 }
 
-const recognitionHistory = ref<RecognitionItem[]>([
-  {
-    id: 1,
-    imageUrl: '',
-    flowerName: '月季',
-    family: '蔷薇科',
-    color: '红色、粉色、黄色等',
-    bloomingPeriod: '5月-10月（夏秋）',
-    description: '月季花被称为"花中皇后"，四季开花，花色丰富，芳香浓郁。',
-    careGuide: '喜阳光充足，耐旱耐寒，但不耐水湿。春秋季可每天浇水，保持土壤湿润。生长旺季每月施肥一次。',
-    flowerLanguage: '寓意纯洁的爱、热情和祝福，是爱情的象征。',
-    confidence: 95,
-    timestamp: Date.now() - 3600000
-  },
-  {
-    id: 2,
-    imageUrl: '',
-    flowerName: '玫瑰',
-    family: '蔷薇科',
-    color: '红色、粉色、白色等',
-    bloomingPeriod: '5月-10月（夏秋）',
-    description: '玫瑰是世界著名的观赏植物，花形优美，香气浓郁，被称为"爱情之花"。',
-    careGuide: '喜温暖、阳光充足的环境，耐寒性较强，需要充足的阳光。春秋季每天浇水，夏季早晚各浇一次。',
-    flowerLanguage: '象征爱情、美丽和热情，表达真挚的情感。',
-    confidence: 92,
-    timestamp: Date.now() - 86400000
-  },
-  {
-    id: 3,
-    imageUrl: '',
-    flowerName: '向日葵',
-    family: '菊科',
-    color: '金黄色',
-    bloomingPeriod: '7月-9月（夏季）',
-    description: '向日葵因花序随太阳转动而得名，象征光明和希望。',
-    careGuide: '喜温暖、阳光充足的环境，耐旱不耐涝。每天需6-8小时直射光照。',
-    flowerLanguage: '寓意忠诚、爱慕、阳光和希望。',
-    confidence: 88,
-    timestamp: Date.now() - 172800000
-  }
-])
+import axios from 'axios'
 
-const qaHistory = ref<QAItem[]>([
-  {
-    id: 1,
-    flowerName: '月季',
-    question: '月季如何浇水？',
-    answer: '月季的浇水原则是"见干见湿"。春秋两季生长旺盛期，可每2-3天浇一次水；夏季高温时，每天早晚各浇一次水；冬季休眠期减少浇水，每周一次即可。注意避免积水，以免根部腐烂。',
-    timestamp: Date.now() - 7200000
-  },
-  {
-    id: 2,
-    flowerName: '玫瑰',
-    question: '玫瑰需要多少光照？',
-    answer: '玫瑰喜阳光充足的环境，每天至少需要6-8小时的直射光照。光照不足会导致花朵稀少、颜色暗淡。如果是盆栽玫瑰，应放置在阳台或庭院阳光充足处。',
-    timestamp: Date.now() - 3600000
-  },
-  {
-    id: 3,
-    flowerName: '月季',
-    question: '如何防治月季的白粉病？',
-    answer: '防治月季白粉病的方法：1）改善通风，避免植株过密；2）控制湿度，避免叶片长时间湿润；3）发现病叶及时摘除销毁；4）发病初期喷洒75%百菌清可湿性粉剂800倍液或50%多菌灵可湿性粉剂1000倍液，每7-10天喷一次，连续2-3次。',
-    timestamp: Date.now() - 1800000
-  }
-])
+const recognitionHistory = ref<RecognitionItem[]>([])
+const qaHistory = ref<QAItem[]>([])
 
 // 所有历史记录（用于导出）
 const historyList = computed(() => {
@@ -339,12 +278,15 @@ const deleteHistory = async (id: number, type: 'recognition' | 'qa') => {
       }
     )
 
+    const token = localStorage.getItem('access_token')
+    const headers = token ? { Authorization: `Bearer ${token}` } : {}
     if (type === 'recognition') {
+      await axios.delete(`/api/flower/history/${id}`, { headers })
       recognitionHistory.value = recognitionHistory.value.filter(h => h.id !== id)
     } else {
+      await axios.delete(`/api/qa/history/${id}`, { headers })
       qaHistory.value = qaHistory.value.filter(h => h.id !== id)
     }
-
     ElMessage.success('删除成功')
   } catch {
     // 用户取消删除
@@ -402,6 +344,42 @@ const exportHistory = () => {
   link.click()
   ElMessage.success('导出成功')
 }
+
+// 加载真实历史记录
+const loadHistory = async () => {
+  const token = localStorage.getItem('access_token')
+  const headers = token ? { Authorization: `Bearer ${token}` } : {}
+  try {
+    const [recRes, qaRes] = await Promise.all([
+      axios.get('/api/flower/history', { headers }),
+      axios.get('/api/qa/history', { headers })
+    ])
+    recognitionHistory.value = recRes.data.map((r: any) => ({
+      id: r.id,
+      imageUrl: r.imageUrl || '',
+      flowerName: r.flowerName,
+      family: r.family,
+      color: r.color,
+      bloomingPeriod: r.bloomingPeriod,
+      description: r.description,
+      careGuide: r.careGuide,
+      flowerLanguage: r.flowerLanguage,
+      confidence: r.confidence,
+      timestamp: Date.parse(r.timestamp)
+    }))
+    qaHistory.value = qaRes.data.map((q: any) => ({
+      id: q.id,
+      flowerName: (q.flowerName || ''), // 若未来加入绑定花卉
+      question: q.question,
+      answer: q.answer,
+      timestamp: Date.parse(q.created_at)
+    }))
+  } catch (e) {
+    // 未登录或请求失败时保持为空
+  }
+}
+
+loadHistory()
 
 const goToQA = (flowerName: string) => {
   detailDialogVisible.value = false

@@ -20,7 +20,8 @@
                 <el-icon :size="50"><User /></el-icon>
               </el-avatar>
             </div>
-            <h2 class="user-name">{{ userInfo.nickname || store.auth.user?.username || '未登录用户' }}</h2>
+            <h2 class="user-name">{{ userInfo.nickname || '未设置昵称' }}</h2>
+            <p class="user-username">用户名：{{ store.auth.user?.username || '未知' }}</p>
             <p class="user-email">{{ store.auth.user?.email || '未绑定邮箱' }}</p>
             <p class="user-bio">{{ userInfo.bio }}</p>
 
@@ -175,7 +176,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { useStore } from '@/stores'
@@ -292,15 +293,25 @@ const loadFavorites = () => {
 const loadUserInfo = () => {
   get('api/user/me', (data) => {
     store.auth.user = data
-    userInfo.value.nickname = data.username
-    userInfo.value.avatar = '' // 默认头像
-    userInfo.value.bio = '热爱花卉，享受自然'
+    userInfo.value.nickname = data.nickname || ''
+    userInfo.value.avatar = data.avatar || ''
+    userInfo.value.bio = data.bio || '热爱花卉，享受自然'
   })
 }
 
-loadUserInfo()
-loadStats()
-loadFavorites()
+const refreshData = () => {
+  loadUserInfo()
+  loadStats()
+  loadFavorites()
+}
+
+onMounted(() => {
+  refreshData()
+})
+
+onActivated(() => {
+  refreshData()
+})
 
 // 监听对话框打开，初始化编辑表单
 watch(() => editProfileDialog.value, (val) => {
@@ -350,7 +361,36 @@ const logout = async () => {
 const handleAvatarChange = (file: any) => {
   const reader = new FileReader()
   reader.onload = (e) => {
-    editForm.value.avatar = e.target?.result as string
+    const img = new Image()
+    img.onload = () => {
+      // 创建 canvas 进行压缩
+      const canvas = document.createElement('canvas')
+      let width = img.width
+      let height = img.height
+      const maxSide = 400 // 头像不需要太大，限制最大边长为 400px
+
+      if (width > height) {
+        if (width > maxSide) {
+          height = Math.round((height * maxSide) / width)
+          width = maxSide
+        }
+      } else {
+        if (height > maxSide) {
+          width = Math.round((width * maxSide) / height)
+          height = maxSide
+        }
+      }
+
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')
+      ctx?.drawImage(img, 0, 0, width, height)
+
+      // 转换为较小的 base64 字符串 (jpeg 格式，0.7 质量)
+      const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7)
+      editForm.value.avatar = compressedBase64
+    }
+    img.src = e.target?.result as string
   }
   reader.readAsDataURL(file.raw)
 }
@@ -361,21 +401,30 @@ const saveProfile = async () => {
   await profileFormRef.value.validate((valid) => {
     if (valid) {
       saving.value = true
-      // 模拟后端保存，实际更新本地状态
-      setTimeout(() => {
+      const token = localStorage.getItem('access_token')
+      axios.put('/api/user/profile', {
+        avatar: editForm.value.avatar,
+        nickname: editForm.value.nickname,
+        bio: editForm.value.bio
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      }).then(() => {
         userInfo.value.avatar = editForm.value.avatar || userInfo.value.avatar
         userInfo.value.nickname = editForm.value.nickname
         userInfo.value.bio = editForm.value.bio
-        
-        // 同步更新 store 中的用户名（用于全局显示）
         if (store.auth.user) {
           store.auth.user.username = editForm.value.nickname
         }
-        
-        saving.value = false
-        editProfileDialog.value = false
         ElMessage.success('个人信息已更新')
-      }, 500)
+        editProfileDialog.value = false
+      }).catch(() => {
+        ElMessage.error('保存失败，请稍后重试')
+      }).finally(() => {
+        saving.value = false
+      })
     }
   })
 }

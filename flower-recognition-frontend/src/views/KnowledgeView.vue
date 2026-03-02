@@ -45,28 +45,7 @@
             </el-tag>
           </div>
 
-          <el-divider content-position="left" style="margin-top: 20px;">
-            <span class="filter-title">按颜色筛选</span>
-          </el-divider>
-          <div class="filter-tags">
-            <el-tag
-              v-for="color in colorCategories"
-              :key="color.name"
-              color="#FFFFFF"
-              effect="plain"
-              class="filter-tag color-tag"
-              :style="{ 
-                borderColor: color.value, 
-                color: color.value,
-                borderWidth: selectedColor === color.name ? '3px' : '1px',
-                fontWeight: selectedColor === color.name ? '700' : '400',
-                transform: selectedColor === color.name ? 'scale(1.1)' : 'scale(1)'
-              }"
-              @click="selectColor(color.name)"
-            >
-              {{ color.name }}
-            </el-tag>
-          </div>
+          <!-- 已移除颜色筛选 -->
 
           <el-divider content-position="left" style="margin-top: 20px;">
             <span class="filter-title">按花期筛选</span>
@@ -87,7 +66,7 @@
       </div>
 
       <!-- 热门推荐 -->
-      <div v-if="!searchKeyword && !selectedCategory && !selectedColor && !selectedPeriod" class="hot-section">
+      <div v-if="!searchKeyword && !selectedCategory && !selectedPeriod" class="hot-section">
         <el-divider content-position="left">
           <span class="hot-title">🔥 热门推荐</span>
         </el-divider>
@@ -113,7 +92,7 @@
       <div class="flowers-section">
         <el-divider content-position="left">
           <span class="section-title">
-            {{ searchKeyword || selectedCategory || selectedColor || selectedPeriod ? '搜索结果' : '全部花卉' }}
+            {{ searchKeyword || selectedCategory || selectedPeriod ? '搜索结果' : '全部花卉' }}
             <el-tag type="info" size="small">{{ filteredFlowers.length }} 项</el-tag>
           </span>
         </el-divider>
@@ -190,9 +169,13 @@
               <el-icon><ChatDotRound /></el-icon>
               发起问答
             </el-button>
-            <el-button @click="addToFavorites(selectedFlower)">
-              <el-icon><Star /></el-icon>
-              收藏
+            <el-button 
+              :type="isFavoriteDetail ? 'warning' : ''" 
+              :loading="favoriteLoading" 
+              @click="toggleFavoriteDetail(selectedFlower!)"
+            >
+              <el-icon v-if="!isFavoriteDetail"><Star /></el-icon>
+              {{ isFavoriteDetail ? '已收藏' : '收藏' }}
             </el-button>
             <el-button type="success" @click="openCommentArea">评论</el-button>
             <el-button type="warning" @click="openFeedbackDialog">反馈</el-button>
@@ -289,10 +272,12 @@ interface Flower {
 const router = useRouter()
 const searchKeyword = ref('')
 const selectedCategory = ref('')
-const selectedColor = ref('')
+// 已移除颜色筛选
 const selectedPeriod = ref('')
 const detailVisible = ref(false)
 const selectedFlower = ref<Flower | null>(null)
+const isFavoriteDetail = ref(false)
+const favoriteLoading = ref(false)
 
 const flowers = ref<Flower[]>([])
 
@@ -318,15 +303,7 @@ const feedbackSubmitting = ref(false)
 // 科属分类
 const familyCategories = ref(['蔷薇科', '菊科', '兰科', '百合科', '豆科', '仙人掌科'])
 
-// 颜色分类
-const colorCategories = ref([
-  { name: '红色', value: '#F44336' },
-  { name: '粉色', value: '#E91E63' },
-  { name: '黄色', value: '#FFC107' },
-  { name: '白色', value: '#FFFFFF' },
-  { name: '蓝色', value: '#2196F3' },
-  { name: '紫色', value: '#9C27B0' }
-])
+// 已移除颜色分类
 
 // 花期分类
 const bloomingPeriods = ref(['春季', '夏季', '秋季', '冬季', '全年'])
@@ -452,10 +429,7 @@ const filteredFlowers = computed(() => {
     result = result.filter(flower => flower.family === selectedCategory.value)
   }
 
-  // 颜色筛选
-  if (selectedColor.value) {
-    result = result.filter(flower => flower.color.includes(selectedColor.value))
-  }
+  // 已移除颜色筛选
 
   // 花期筛选
   if (selectedPeriod.value) {
@@ -470,9 +444,7 @@ const selectCategory = (category: string) => {
   selectedCategory.value = selectedCategory.value === category ? '' : category
 }
 
-const selectColor = (color: string) => {
-  selectedColor.value = selectedColor.value === color ? '' : color
-}
+// 已移除颜色选择
 
 const selectPeriod = (period: string) => {
   selectedPeriod.value = selectedPeriod.value === period ? '' : period
@@ -480,7 +452,7 @@ const selectPeriod = (period: string) => {
 
 const clearCategory = () => {
   selectedCategory.value = ''
-  selectedColor.value = ''
+  // 已移除颜色清理
   selectedPeriod.value = ''
 }
 
@@ -494,6 +466,8 @@ const viewDetail = (flower: Flower) => {
   detailVisible.value = true
   commentAreaVisible.value = true
   loadComments()
+  // 检查是否已收藏
+  checkFavoriteStatus(flower.id)
 }
 
 // 发起问答
@@ -505,19 +479,37 @@ const startQA = (flower: Flower) => {
   detailVisible.value = false
 }
 
-// 添加到收藏
-const addToFavorites = (flower: Flower) => {
+const checkFavoriteStatus = (flowerId: number) => {
+  const token = localStorage.getItem('access_token')
+  if (!token) {
+    isFavoriteDetail.value = false
+    return
+  }
+  axios.get('/api/favorites/list', { headers: { Authorization: `Bearer ${token}` } }).then(({ data }) => {
+    isFavoriteDetail.value = !!data.find((d: any) => d.flower_id === flowerId)
+  }).catch(() => {
+    isFavoriteDetail.value = false
+  })
+}
+
+// 详情弹窗内收藏/取消收藏
+const toggleFavoriteDetail = (flower: Flower) => {
   const token = localStorage.getItem('access_token')
   if (!token) {
     ElMessage.warning('请先登录后再进行收藏')
     return
   }
-  axios.post(`/api/favorites/add/${(flower as any).id || 0}`, {}, {
-    headers: { Authorization: `Bearer ${token}` }
-  }).then(() => {
-    ElMessage.success(`已将${flower.name}添加到收藏`)
+  favoriteLoading.value = true
+  const headers = { Authorization: `Bearer ${token}` }
+  const url = isFavoriteDetail.value ? `/api/favorites/remove/${flower.id}` : `/api/favorites/add/${flower.id}`
+  const req = isFavoriteDetail.value ? axios.delete(url, { headers }) : axios.post(url, {}, { headers })
+  req.then(() => {
+    isFavoriteDetail.value = !isFavoriteDetail.value
+    ElMessage.success(isFavoriteDetail.value ? `已将${flower.name}添加到收藏` : `已取消${flower.name}的收藏`)
   }).catch(err => {
-    ElMessage.error(err?.response?.data?.detail || '收藏失败')
+    ElMessage.error(err?.response?.data?.detail || '操作失败')
+  }).finally(() => {
+    favoriteLoading.value = false
   })
 }
 

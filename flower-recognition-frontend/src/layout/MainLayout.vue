@@ -18,7 +18,20 @@
       </div>
     </el-header>
     <el-main class="app-main">
-      <RouterView />
+      <RouterView v-slot="{ Component, route }">
+        <KeepAlive>
+          <component
+            :is="Component"
+            v-if="route.meta && route.meta.keepAlive"
+            :key="route.fullPath"
+          />
+        </KeepAlive>
+        <component
+          :is="Component"
+          v-if="!route.meta || !route.meta.keepAlive"
+          :key="route.fullPath"
+        />
+      </RouterView>
     </el-main>
   </el-container>
 </template>

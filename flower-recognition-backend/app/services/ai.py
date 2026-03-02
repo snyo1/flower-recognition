@@ -5,6 +5,10 @@ from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate, MessagesPlaceholder
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from ..core.config import settings
+from zai import ZhipuAiClient
+
+# 初始化 Zhipu AI 客户端
+zhipu_client = ZhipuAiClient(api_key=settings.ZHIPU_API_KEY)
 
 # 初始化 DeepSeek 模型 (使用 langchain-openai 的适配器)
 def get_llm(model: str = "deepseek-chat", temperature: float = 0.7, timeout: int = 60):
@@ -19,10 +23,9 @@ def get_llm(model: str = "deepseek-chat", temperature: float = 0.7, timeout: int
 
 # 提示词模板定义
 class PromptTemplates:
-    # 1. 花卉识别与科普信息生成模板
-    IDENTIFICATION_SYSTEM = """你是一个专业的花卉专家和植物学家。
-你的任务是根据用户提供的花卉名称或描述，生成详细的科普信息。
-你必须以严格的 JSON 格式返回结果，不包含任何解释性文字或 Markdown 代码块标记。
+    # 1. 多模态花卉识别模板
+    MULTIMODAL_SYSTEM = """你是一个专业的植物学家。分析用户提供的图片，并以 JSON 格式返回识别出的花卉信息。
+你必须返回严格的 JSON 格式，不包含任何 Markdown 标记或解释。
 
 JSON 结构如下：
 {{
@@ -36,18 +39,17 @@ JSON 结构如下：
   "confidence": 95.0
 }}"""
 
-    IDENTIFICATION_USER = "请为以下花卉生成科普信息：{flower_info}"
+    MULTIMODAL_USER = "这张图片中的花卉是什么？请提供详细的科普信息。"
 
     # 2. 智能问答系统模板
     QA_SYSTEM = """你是一个亲切、专业的花卉科普助手，名字叫“花世界智能管家”。
 你擅长解答关于花卉识别、家庭养护、园艺技巧、植物百科、花语寓意等各方面的问题。
-你的回答应该：
-1. 专业且准确：基于植物学事实。
-2. 亲切且友好：用通俗易懂的语言，像朋友一样交流。
-3. 结构清晰：如果回答较长，请使用分点说明。
-4. 引导性：如果用户提问模糊，可以尝试引导其提供更多细节（如叶片形状、生长环境等）。
-
-如果用户的问题与植物或园艺完全无关，请礼貌地告知你只能回答花卉相关的问题。"""
+你的回答要求：
+1. **禁止使用 Markdown 格式**：不要使用星号（*）、井号（#）、反引号（`）等 Markdown 符号。
+2. **纯文本分段**：请使用正常的空行来进行分段，使回答清晰易读。
+3. 专业且准确：基于植物学事实。
+4. 亲切且友好：用通俗易懂的语言，像朋友一样交流。
+5. 如果用户的问题与植物或园艺完全无关，请礼貌地告知你只能回答花卉相关的问题。"""
 
 # 核心 AI 逻辑
 def generate_text(prompt: str, history: List[Dict[str, str]] = None, system_prompt: Optional[str] = None) -> str:
@@ -85,57 +87,71 @@ def generate_text(prompt: str, history: List[Dict[str, str]] = None, system_prom
         print(f"DeepSeek API Error: {str(e)}")
         return f"抱歉，问答服务暂时不可用 (错误: {str(e)})"
 
-def identify_and_generate(image_data: bytes = None, image_hint: str = "未知花卉") -> dict:
-    """
-    识别花卉并生成科普信息。
-    注意：由于 DeepSeek 主要是文本模型，目前流程为：
-    1. 前端/后端通过其他方式初步确定名称（或 image_hint 为识别出的名称）
-    2. 使用 DeepSeek 生成高质量的科普内容。
-    """
-    if not settings.DEEPSEEK_API_KEY:
-        # 离线兜底
-        return {
-            "name": image_hint,
-            "family": "未知",
-            "color": "未知",
-            "bloomingPeriod": "未知",
-            "description": "DeepSeek API 未配置，无法生成详细科普内容。",
-            "careGuide": "暂无养护建议。",
-            "flowerLanguage": "暂无花语信息。",
-            "confidence": 0.0
-        }
+def identify_flower_multimodal(image_bytes: bytes) -> dict:
+    """使用 Zhipu AI GLM-4.6V 识别图片中的花卉"""
+    if not settings.ZHIPU_API_KEY:
+        return {"error": "Zhipu AI API Key 未配置"}
 
     try:
-        llm = get_llm(temperature=0.2, timeout=45) # 识别任务降低随机性，并稍微缩短超时以快速反馈
+        # 将图片编码为 base64
+        image_base64 = base64.b64encode(image_bytes).decode('utf-8')
         
-        prompt_template = ChatPromptTemplate.from_messages([
-            ("system", PromptTemplates.IDENTIFICATION_SYSTEM),
-            ("human", PromptTemplates.IDENTIFICATION_USER)
-        ])
+        # 调用 Zhipu AI API
+        response = zhipu_client.chat.completions.create(
+            model=settings.ZHIPU_MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": PromptTemplates.MULTIMODAL_SYSTEM
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{image_base64}"
+                            }
+                        },
+                        {
+                            "type": "text",
+                            "text": PromptTemplates.MULTIMODAL_USER
+                        }
+                    ]
+                }
+            ],
+            thinking={
+                "type": "enabled"
+            }
+        )
         
-        chain = prompt_template | llm
-        
-        response = chain.invoke({"flower_info": image_hint})
-        text = response.content
+        text = response.choices[0].message.content
         
         # 提取并解析 JSON
         start = text.find('{')
         end = text.rfind('}') + 1
         if start != -1 and end != 0:
-            json_str = text[start:end]
-            return json.loads(json_str)
+            return json.loads(text[start:end])
             
         raise ValueError("AI 未返回有效的 JSON 格式")
-        
     except Exception as e:
-        print(f"Identification Error: {str(e)}")
-        return {
-            "name": image_hint,
-            "family": "处理中",
-            "color": "见图",
-            "bloomingPeriod": "咨询中",
-            "description": f"获取科普信息失败: {str(e)}",
-            "careGuide": "请稍后再试",
-            "flowerLanguage": "未知",
-            "confidence": 0.0
-        }
+        print(f"Zhipu AI Identification Error: {str(e)}")
+        return {"error": str(e)}
+
+def generate_flower_info(flower_name: str) -> dict:
+    """基于花卉名称生成详细科普信息"""
+    try:
+        llm = get_llm(temperature=0.7)
+        prompt = f"请作为植物学家，为'{flower_name}'生成详细的科普信息。要求包含科属、花期、颜色、详细特征描述、养护指南、花语文化。请以 JSON 格式返回。"
+        
+        system_msg = SystemMessage(content=PromptTemplates.MULTIMODAL_SYSTEM) # 复用 JSON 结构定义
+        
+        response = llm.invoke([system_msg, HumanMessage(content=prompt)])
+        text = response.content
+        
+        start = text.find('{')
+        end = text.rfind('}') + 1
+        return json.loads(text[start:end])
+    except Exception as e:
+        print(f"Generate Info Error: {str(e)}")
+        return {}
