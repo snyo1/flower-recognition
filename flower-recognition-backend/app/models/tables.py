@@ -34,6 +34,7 @@ class Flower(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False)
     care_guide: Mapped[str] = mapped_column(Text, nullable=False)
     flower_language: Mapped[str] = mapped_column(Text, nullable=False)
+    plant_type: Mapped[Optional[str]] = mapped_column(String(64)) # 草本/木本/多肉/藤本
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 

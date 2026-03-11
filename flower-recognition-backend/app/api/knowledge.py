@@ -26,6 +26,7 @@ async def get_all_knowledge(keyword: str = "", db: AsyncSession = Depends(get_db
             description=row.description,
             careGuide=row.care_guide,
             flowerLanguage=row.flower_language,
+            plantType=row.plant_type or "未知"
         ) for row in rows]
         return FlowerKnowledgeList(flowers=flowers)
     except SQLAlchemyError:

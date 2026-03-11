@@ -10,6 +10,7 @@ class FlowerIdentification(BaseModel):
     careGuide: str
     flowerLanguage: str
     confidence: float
+    type: Optional[str] = "未知"
 
 class BatchIdentificationResponse(BaseModel):
     results: List[FlowerIdentification]
@@ -30,6 +31,7 @@ class FlowerKnowledge(BaseModel):
     description: str
     careGuide: str
     flowerLanguage: str
+    plantType: Optional[str] = "未知"
 
 class FlowerKnowledgeList(BaseModel):
     flowers: List[FlowerKnowledge]

@@ -52,12 +52,16 @@ async def _process_single_image(file: UploadFile, db: AsyncSession, current_user
                 description=ai_result["description"],
                 care_guide=ai_result["careGuide"],
                 flower_language=ai_result["flowerLanguage"],
+                plant_type=ai_result.get("type", "未知")
             )
             db.add(f)
             await db.flush()
             plant_id = f.id
         else:
             plant_id = existing.id
+            # 自动关联：如果知识库信息不全，则补充（按需开启）
+            if not existing.plant_type and "type" in ai_result:
+                existing.plant_type = ai_result["type"]
             
         # 4. 记录识别历史（保存 MinIO 对象名作为 URL）
         rec = RecognitionRecord(

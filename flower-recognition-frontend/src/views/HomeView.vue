@@ -63,6 +63,17 @@
               {{ previewUrls.length > 1 ? '批量识别' : '开始识别' }}
             </el-button>
           </div>
+
+          <div v-if="identifying" class="progress-section">
+            <el-progress 
+              :percentage="uploadProgress" 
+              :status="uploadProgress === 100 ? 'success' : ''"
+              :stroke-width="10"
+              striped
+              striped-flow
+            />
+            <div class="progress-text">{{ uploadProgress < 100 ? '正在上传图片...' : '正在识别中，请稍候...' }}</div>
+          </div>
         </el-card>
       </div>
 
@@ -203,22 +214,76 @@ const handleFileChange: UploadProps['onChange'] = (uploadFile, uploadFiles) => {
       return
     }
 
-    // 验证文件大小
-    if (file.size > 5 * 1024 * 1024) {
-      ElMessage.error('图片过大，请压缩后上传')
-      return
-    }
-
-    previewUrls.value.push(URL.createObjectURL(file))
-    fileList.value.push(uploadFile)
-    results.value = []
+    // 批量处理时，为了性能和稳定性，进行前端压缩
+    compressImage(file).then(compressedFile => {
+      previewUrls.value.push(URL.createObjectURL(compressedFile))
+      // 替换原始文件为压缩后的文件，用于上传
+      const newUploadFile = { ...uploadFile, raw: compressedFile }
+      fileList.value.push(newUploadFile)
+      results.value = []
+    }).catch(err => {
+      console.error('图片压缩失败:', err)
+      // 降级使用原图
+      previewUrls.value.push(URL.createObjectURL(file))
+      fileList.value.push(uploadFile)
+    })
   }
+}
+
+const compressImage = (file: File): Promise<File> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.readAsDataURL(file)
+    reader.onload = (e) => {
+      const img = new Image()
+      img.src = e.target?.result as string
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        let width = img.width
+        let height = img.height
+        const maxSide = 1280 // 识别用的图片可以稍大一点，保持细节
+
+        if (width > height) {
+          if (width > maxSide) {
+            height = Math.round((height * maxSide) / width)
+            width = maxSide
+          }
+        } else {
+          if (height > maxSide) {
+            width = Math.round((width * maxSide) / height)
+            height = maxSide
+          }
+        }
+
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext('2d')
+        ctx?.drawImage(img, 0, 0, width, height)
+
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const compressedFile = new File([blob], file.name, {
+              type: 'image/jpeg',
+              lastModified: Date.now()
+            })
+            resolve(compressedFile)
+          } else {
+            reject(new Error('Canvas to Blob failed'))
+          }
+        }, 'image/jpeg', 0.8)
+      }
+      img.onerror = reject
+    }
+    reader.onerror = reject
+  })
 }
 
 const removeFile = (index: number) => {
   previewUrls.value.splice(index, 1)
   fileList.value.splice(index, 1)
 }
+
+const uploadProgress = ref(0)
 
 const identifyFlower = async () => {
   if (fileList.value.length === 0) {
@@ -228,6 +293,7 @@ const identifyFlower = async () => {
 
   identifying.value = true
   results.value = []
+  uploadProgress.value = 0
 
   try {
     const formData = new FormData()
@@ -247,6 +313,11 @@ const identifyFlower = async () => {
       headers: {
         'Content-Type': 'multipart/form-data',
         ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      onUploadProgress: (progressEvent) => {
+        if (progressEvent.total) {
+          uploadProgress.value = Math.round((progressEvent.loaded * 100) / progressEvent.total)
+        }
       }
     })
 
@@ -467,6 +538,20 @@ const triggerFileUpload = () => {
 
 .btn-primary, .btn-secondary {
   flex: 1;
+}
+
+.progress-section {
+  margin-top: 20px;
+  padding: 10px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+}
+
+.progress-text {
+  margin-top: 8px;
+  text-align: center;
+  font-size: 13px;
+  color: #666;
 }
 
 /* 结果列表样式 */
