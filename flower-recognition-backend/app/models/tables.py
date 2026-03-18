@@ -14,7 +14,11 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(256), nullable=False, default="")
     email: Mapped[Optional[str]] = mapped_column(String(128), unique=True, index=True)
     role: Mapped[str] = mapped_column(Enum("user", "expert", "admin"), default="user")
+    status: Mapped[str] = mapped_column(Enum("active", "disabled"), default="active")
     registration_date: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    last_login_ip: Mapped[Optional[str]] = mapped_column(String(64))
+    
     # 个人资料（通过 profile 关联存储）
     profile: Mapped[Optional["UserProfile"]] = relationship(back_populates="user", uselist=False)
 
@@ -35,10 +39,15 @@ class Flower(Base):
     care_guide: Mapped[str] = mapped_column(Text, nullable=False)
     flower_language: Mapped[str] = mapped_column(Text, nullable=False)
     plant_type: Mapped[Optional[str]] = mapped_column(String(64)) # 草本/木本/多肉/藤本
+    status: Mapped[str] = mapped_column(Enum("draft", "pending", "published"), default="published")
+    tags: Mapped[Optional[str]] = mapped_column(String(256)) # 逗号分隔的标签
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
-    recognitions: Mapped[List["RecognitionRecord"]] = relationship(back_populates="flower")
+    recognitions: Mapped[List["RecognitionRecord"]] = relationship(
+        back_populates="flower",
+        foreign_keys="RecognitionRecord.plant_id"
+    )
     comments: Mapped[List["Comment"]] = relationship(back_populates="flower")
 
 class RecognitionRecord(Base):
@@ -49,9 +58,17 @@ class RecognitionRecord(Base):
     plant_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey("flowers.id"))
     user_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey("users.id"))
     confidence: Mapped[Optional[float]] = mapped_column(DECIMAL(5, 2))
+    is_corrected: Mapped[bool] = mapped_column(default=False)
+    corrected_plant_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey("flowers.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     
-    flower: Mapped[Optional["Flower"]] = relationship(back_populates="recognitions")
+    flower: Mapped[Optional["Flower"]] = relationship(
+        back_populates="recognitions",
+        foreign_keys=[plant_id]
+    )
+    corrected_flower: Mapped[Optional["Flower"]] = relationship(
+        foreign_keys=[corrected_plant_id]
+    )
     user: Mapped[Optional["User"]] = relationship(back_populates="recognitions")
 
 class Comment(Base):
@@ -61,6 +78,7 @@ class Comment(Base):
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
     flower_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("flowers.id"), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Enum("pending", "approved", "rejected"), default="pending")
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     
     user: Mapped["User"] = relationship(back_populates="comments")
@@ -73,7 +91,9 @@ class Feedback(Base):
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
     flower_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey("flowers.id"))
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    status: Mapped[str] = mapped_column(Enum("pending", "processed"), default="pending")
+    status: Mapped[str] = mapped_column(Enum("pending", "processing", "resolved", "closed"), default="pending")
+    reply_content: Mapped[Optional[str]] = mapped_column(Text)
+    processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     
     user: Mapped["User"] = relationship(back_populates="feedbacks")
@@ -139,3 +159,26 @@ class UserProfile(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
     
     user: Mapped["User"] = relationship(back_populates="profile")
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+    
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    admin_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
+    action: Mapped[str] = mapped_column(String(64), nullable=False) # e.g., "update_flower", "disable_user"
+    target_type: Mapped[str] = mapped_column(String(64), nullable=False) # e.g., "Flower", "User"
+    target_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    details: Mapped[Optional[str]] = mapped_column(Text) # JSON string of changes
+    ip_address: Mapped[Optional[str]] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    admin: Mapped["User"] = relationship()
+
+class FlowerVersion(Base):
+    __tablename__ = "flower_versions"
+    
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    flower_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("flowers.id"), nullable=False)
+    data: Mapped[str] = mapped_column(Text, nullable=False) # JSON snapshot of flower data
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    created_by: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"))
