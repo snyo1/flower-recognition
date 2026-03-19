@@ -22,9 +22,10 @@ class User(Base):
     # 个人资料（通过 profile 关联存储）
     profile: Mapped[Optional["UserProfile"]] = relationship(back_populates="user", uselist=False)
 
-    recognitions: Mapped[List["RecognitionRecord"]] = relationship(back_populates="user")
+    recognitions: Mapped[List["RecognitionRecord"]] = relationship(back_populates="user", lazy="selectin")
     comments: Mapped[List["Comment"]] = relationship(back_populates="user")
     feedbacks: Mapped[List["Feedback"]] = relationship(back_populates="user")
+    qa_histories: Mapped[List["QAHistory"]] = relationship(back_populates="user")
     expert_application: Mapped[Optional["ExpertApplication"]] = relationship(back_populates="user", uselist=False)
 
 class Flower(Base):
@@ -64,12 +65,13 @@ class RecognitionRecord(Base):
     
     flower: Mapped[Optional["Flower"]] = relationship(
         back_populates="recognitions",
-        foreign_keys=[plant_id]
+        foreign_keys=[plant_id],
+        lazy="selectin"
     )
     corrected_flower: Mapped[Optional["Flower"]] = relationship(
         foreign_keys=[corrected_plant_id]
     )
-    user: Mapped[Optional["User"]] = relationship(back_populates="recognitions")
+    user: Mapped[Optional["User"]] = relationship(back_populates="recognitions", lazy="selectin")
 
 class Comment(Base):
     __tablename__ = "comments"
@@ -81,8 +83,8 @@ class Comment(Base):
     status: Mapped[str] = mapped_column(Enum("pending", "approved", "rejected"), default="pending")
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     
-    user: Mapped["User"] = relationship(back_populates="comments")
-    flower: Mapped["Flower"] = relationship(back_populates="comments")
+    user: Mapped["User"] = relationship(back_populates="comments", lazy="selectin")
+    flower: Mapped["Flower"] = relationship(back_populates="comments", lazy="selectin")
 
 class Feedback(Base):
     __tablename__ = "feedbacks"
@@ -96,7 +98,7 @@ class Feedback(Base):
     processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     
-    user: Mapped["User"] = relationship(back_populates="feedbacks")
+    user: Mapped["User"] = relationship(back_populates="feedbacks", lazy="selectin")
 
 class ExpertApplication(Base):
     __tablename__ = "expert_applications"
@@ -146,6 +148,7 @@ class QAHistory(Base):
     user_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey("users.id"), index=True)
     question: Mapped[str] = mapped_column(Text, nullable=False)
     answer: Mapped[Optional[str]] = mapped_column(Text)
+    user: Mapped[Optional["User"]] = relationship(back_populates="qa_histories", lazy="selectin")
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 class UserProfile(Base):

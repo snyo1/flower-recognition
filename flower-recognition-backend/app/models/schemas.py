@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional, List
+from datetime import datetime
 
 class FlowerIdentification(BaseModel):
     name: str
@@ -35,3 +36,26 @@ class FlowerKnowledge(BaseModel):
 
 class FlowerKnowledgeList(BaseModel):
     flowers: List[FlowerKnowledge]
+
+class UserSchema(BaseModel):
+    id: int
+    username: str
+    email: str
+    role: str
+    registration_date: datetime
+    # Add other fields as necessary, e.g., avatar, nickname, bio from UserProfile
+
+class FeedbackSchema(BaseModel):
+    id: int
+    user_id: int
+    content: str
+    timestamp: datetime
+    # Add other fields as necessary
+
+class CommentSchema(BaseModel):
+    id: int
+    user_id: int
+    flower_id: int # Assuming comments are related to flowers
+    content: str
+    timestamp: datetime
+    # Add other fields as necessary

@@ -86,6 +86,17 @@ const router = createRouter({
       ]
     },
     {
+      path: '/admin',
+      component: () => import('@/layout/MainLayout.vue'), // Using MainLayout as AdminLayout is not found
+      meta: { requiresAuth: true, role: 'admin' }, // 权限元信息
+      children: [
+        { path: 'knowledge', name: 'AdminKnowledge', component: () => import('@/views/KnowledgeView.vue') }, // Reusing KnowledgeView for now
+        { path: 'user', name: 'AdminUser', component: () => import('@/views/admin/UserManage.vue') }, // Assuming this path
+        { path: 'feedback', name: 'AdminFeedback', component: () => import('@/views/admin/FeedbackManage.vue') }, // Assuming this path
+        { path: 'comment', name: 'AdminComment', component: () => import('@/views/admin/CommentManage.vue') }, // Assuming this path
+      ]
+    },
+    {
       path: '/:pathMatch(.*)*',
       name: 'not-found',
       redirect: (to) => {
@@ -121,10 +132,25 @@ router.beforeEach(async (to, from, next) => {
   }
 
   const isAuthed = !!(store.auth.user)
+  const userRole = store.auth.user ? store.auth.user.role : null // Assuming user role is available
 
-  // 1. 访问登录/注册相关页面
+  // Handle routes that require authentication
+  if (to.meta.requiresAuth) {
+    if (isAuthed) {
+      // Check for role if specified in meta
+      if (to.meta.role && userRole !== to.meta.role) {
+        // If role doesn't match, redirect to index or an unauthorized page
+        return next('/index') // Or a dedicated unauthorized page
+      }
+      return next() // Authenticated and authorized
+    } else {
+      // Not authenticated, redirect to login
+      return next('/')
+    }
+  }
+
+  // Handle welcome pages
   const isWelcomePage = to.path === '/' || to.path.startsWith('/register') || to.path.startsWith('/forget')
-  
   if (isWelcomePage) {
     if (isAuthed) {
       return next('/index')
@@ -132,8 +158,8 @@ router.beforeEach(async (to, from, next) => {
     return next()
   }
 
-  // 2. 访问受保护页面 (非登录/注册页面)
-  if (!isAuthed) {
+  // For any other page, if not authenticated, redirect to login
+  if (!isAuthed && to.path !== '/') { // Exclude '/' from this check to avoid double redirect
     return next('/')
   }
 

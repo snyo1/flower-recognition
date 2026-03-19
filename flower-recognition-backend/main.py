@@ -9,7 +9,7 @@ from sqladmin.authentication import AuthenticationBackend
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
 from sqlalchemy import select
-from app.api import flower, qa, knowledge, auth, user, favorites, comments, feedbacks
+from app.api import flower, qa, knowledge, auth, user, favorites, comments, feedbacks, admin
 from app.services.db import engine, AsyncSessionFactory
 from app.models.tables import Base, User, Flower, RecognitionRecord, Comment, Feedback, QAHistory, AuditLog, FlowerVersion
 from app.core.security import verify_password
@@ -44,6 +44,7 @@ app.include_router(user.router)
 app.include_router(favorites.router)
 app.include_router(comments.router)
 app.include_router(feedbacks.router)
+app.include_router(admin.router)
 
 # Admin Authentication
 class AdminAuth(AuthenticationBackend):
@@ -91,12 +92,15 @@ admin = Admin(app, engine, title="花世界后台管理", authentication_backend
 
 class UserAdmin(ModelView, model=User):
     column_list = [
-        "id", 
-        "username", 
-        "email", 
-        "role", 
+        "id",
+        "username",
+        "email",
+        "role",
         "status",
+        "is_active",
         "registration_date",
+        "last_login_at",
+        "last_login_ip",
         "recognition_count"
     ]
     column_labels = {
@@ -105,20 +109,29 @@ class UserAdmin(ModelView, model=User):
         "email": "邮箱",
         "role": "角色",
         "status": "状态",
-        "registration_date": "注册时间",
-        "recognition_count": "识别次数"
+        "is_active": "是否活跃",
+        "registration_date": "注册日期",
+        "last_login_at": "上次登录",
+        "last_login_ip": "上次登录IP",
+        "recognition_count": "识别次数",
+        "actions": "操作" # Adding "操作" label for the actions column
     }
     column_searchable_list = ["username", "email"]
     column_filters = [] # 暂时清空以恢复访问
-    can_create = True
-    can_edit = True
-    can_delete = True
-    can_export = True
     name = "用户"
-    name_plural = "1. 用户管理"
+    name_plural = "用户管理"
+    # 操作按钮翻译
+    can_create = True # 新增
+    can_edit = True # 编辑
+    can_delete = True # 删除
+    can_export = True # 导出
+    # "详情" (Show) 的翻译可能需要覆盖模板或使用column_formatters创建链接
 
     def get_query(self):
         return super().get_query().options(selectinload(User.recognitions))
+
+    def get_one_query(self):
+        return self.session.query(User).options(selectinload(User.recognitions))
 
     column_formatters = {
         "recognition_count": lambda m, a: len(m.recognitions) if m.recognitions else 0,
@@ -144,16 +157,19 @@ class FlowerAdmin(ModelView, model=Flower):
         "description": "描述",
         "care_guide": "养护指南",
         "flower_language": "花语",
-        "tags": "标签"
+        "tags": "标签",
+        "actions": "操作" # 添加操作列的标题
     }
     column_searchable_list = ["name", "family", "tags"]
     column_filters = []
-    can_export = True
-    can_create = True
-    can_edit = True
-    can_delete = True
+    # 操作按钮翻译
+    can_export = True # 导出
+    can_create = True # 新增
+    can_edit = True # 编辑
+    can_delete = True # 删除
+    # "详情" (Show) 的翻译可能需要覆盖模板或使用column_formatters创建链接
     name = "花卉"
-    name_plural = "2. 知识库管理"
+    name_plural = "花卉百科"
     
     form_widget_args = {
         "description": {"rows": 10},
@@ -178,16 +194,25 @@ class RecognitionAdmin(ModelView, model=RecognitionRecord):
         "confidence": "置信度",
         "image_preview": "图片预览",
         "is_corrected": "已纠错",
-        "created_at": "时间"
+        "created_at": "时间",
+        "actions": "操作" # 添加操作列的标题
     }
     column_sortable_list = ["id", "confidence", "created_at"]
     column_filters = []
-    can_edit = True # 用于人工纠错
+    # 操作按钮翻译
+    can_create = False # 不允许通过管理界面创建
+    can_edit = True # 编辑 (用于人工纠错)
+    can_delete = False # 不允许通过管理界面删除
+    can_export = True # 允许导出
+    # "详情" (Show) 的翻译可能需要覆盖模板或使用column_formatters创建链接
     name = "识别"
-    name_plural = "3. 识别记录管理"
+    name_plural = "识别记录管理"
 
     def get_query(self):
         return super().get_query().options(selectinload(RecognitionRecord.user), selectinload(RecognitionRecord.flower))
+
+    def get_one_query(self):
+        return self.session.query(RecognitionRecord).options(selectinload(RecognitionRecord.user), selectinload(RecognitionRecord.flower))
 
     column_formatters = {
         "user_name": lambda m, a: m.user.username if m.user else "游客",
@@ -201,14 +226,24 @@ class QAHistoryAdmin(ModelView, model=QAHistory):
         "id": "ID",
         "user_name": "用户",
         "question": "提问内容",
-        "created_at": "提问时间"
+        "created_at": "提问时间",
+        "actions": "操作" # 添加操作列的标题
     }
     column_searchable_list = ["question"]
+    # 操作按钮翻译
+    can_create = False # 不允许通过管理界面创建
+    can_edit = False # 不允许通过管理界面编辑
+    can_delete = True # 允许删除
+    can_export = True # 允许导出
+    # "详情" (Show) 的翻译可能需要覆盖模板或使用column_formatters创建链接
     name = "问答"
-    name_plural = "4. 问答历史管理"
+    name_plural = "问答历史管理"
 
     def get_query(self):
         return super().get_query().options(selectinload(QAHistory.user))
+
+    def get_one_query(self):
+        return self.session.query(QAHistory).options(selectinload(QAHistory.user))
 
     column_formatters = {
         "user_name": lambda m, a: m.user.username if m.user else "游客"
@@ -222,14 +257,24 @@ class CommentAdmin(ModelView, model=Comment):
         "flower_name": "关联花卉",
         "content": "评论内容",
         "status": "状态",
-        "created_at": "时间"
+        "created_at": "时间",
+        "actions": "操作" # 添加操作列的标题
     }
     column_filters = []
+    # 操作按钮翻译
+    can_create = False # 不允许通过管理界面创建
+    can_edit = True # 允许编辑 (例如审核状态)
+    can_delete = True # 允许删除
+    can_export = True # 允许导出
+    # "详情" (Show) 的翻译可能需要覆盖模板或使用column_formatters创建链接
     name = "评论"
-    name_plural = "5. 内容审核管理"
+    name_plural = "内容审核管理"
 
     def get_query(self):
         return super().get_query().options(selectinload(Comment.user), selectinload(Comment.flower))
+
+    def get_one_query(self):
+        return self.session.query(Comment).options(selectinload(Comment.user), selectinload(Comment.flower))
 
     column_formatters = {
         "user_name": lambda m, a: m.user.username if m.user else "系统",
@@ -243,14 +288,24 @@ class FeedbackAdmin(ModelView, model=Feedback):
         "user_name": "反馈用户",
         "content": "反馈内容",
         "status": "状态",
-        "created_at": "时间"
+        "created_at": "时间",
+        "actions": "操作" # 添加操作列的标题
     }
     column_filters = []
+    # 操作按钮翻译
+    can_create = False # 不允许通过管理界面创建
+    can_edit = True # 允许编辑 (例如处理状态)
+    can_delete = True # 允许删除
+    can_export = True # 允许导出
+    # "详情" (Show) 的翻译可能需要覆盖模板或使用column_formatters创建链接
     name = "反馈"
-    name_plural = "6. 反馈与工单管理"
+    name_plural = "反馈与工单管理"
 
     def get_query(self):
         return super().get_query().options(selectinload(Feedback.user))
+
+    def get_one_query(self):
+        return self.session.query(Feedback).options(selectinload(Feedback.user))
 
     column_formatters = {
         "user_name": lambda m, a: m.user.username if m.user else "匿名"
@@ -263,10 +318,18 @@ class AuditLogAdmin(ModelView, model=AuditLog):
         "admin_name": "管理员",
         "action": "动作",
         "target_type": "目标类型",
-        "created_at": "时间"
+        "created_at": "时间",
+        "actions": "操作" # 添加操作列的标题
     }
     name = "审计"
-    name_plural = "7. 系统操作日志"
+    name_plural = "系统操作日志"
+    # 操作按钮翻译
+    can_create = False # 审计日志不允许创建
+    can_edit = False # 审计日志不允许编辑
+    can_delete = False # 审计日志不允许删除
+    can_export = True # 允许导出
+    # "详情" (Show) 的翻译可能需要覆盖模板或使用column_formatters创建链接
+
 
     def get_query(self):
         return super().get_query().options(selectinload(AuditLog.admin))
@@ -280,7 +343,7 @@ admin.add_view(FlowerAdmin)
 admin.add_view(RecognitionAdmin)
 admin.add_view(QAHistoryAdmin)
 admin.add_view(CommentAdmin)
-admin.add_view(FeedbackAdmin)
+# admin.add_view(FeedbackAdmin)
 admin.add_view(AuditLogAdmin)
 
 
