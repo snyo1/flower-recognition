@@ -1,161 +1,197 @@
 # 花世界 - 智能花卉识别与科普系统
 
-基于大模型的智能花卉识别与科普系统，支持多模态花卉图片识别、深度科普信息生成、智能问答、知识库管理以及云端存储功能。
+基于多模态大模型的智能花卉识别与科普系统，支持图片识别、深度科普、智能问答、社区互动以及完整的后台管理功能。
 
-## 最新更新 (2026-03-21)
+---
 
-- **多模态识别**: 集成多模态大模型 API，支持图片直接识别花卉种类、颜色和特征。
-- **MinIO 集成**: 所有上传的识别图片均自动持久化存储至 MinIO 私有云。
-- **首页重构**: 采用左侧上传、右侧结果的响应式布局，支持批量识别与滚动查看。
-- **历史记录**: 实现真实的识别与问答历史持久化，每个用户自动保留最近 10 条记录。
-- **后台管理系统完善**:
-    - **修复多页管理功能**: 解决了用户管理、识别记录管理、问答历史管理、内容审核管理等页面的 `DetachedInstanceError`，通过调整 SQLAlchemy 的 `lazy="selectin"` 加载策略和 SQLAdmin `ModelView` 的 `get_one_query` 方法确保关联数据正确加载。
-    - **UI 优化**: 隐藏了“反馈与工单管理”页面（不删除其功能），移除了侧边栏导航的序号，并将后台管理界面中的关键操作按钮和提示（如“导出”、“新增”、“编辑”、“删除”、“操作”等）本地化为中文，提升了用户体验。
-    - **API 接口**: 完善了用户、反馈、评论等模块的后台 API 接口，并加强了管理员权限验证。
+## 最新更新 (2026-04-23)
+
+### 前端优化
+- **识别失败优雅降级**：识别服务不可用时不再弹出错误提示，而是为每张图片生成"未能识别"占位卡片，引导用户重新拍摄或前往问答。
+- **置信度显示优化**：低于 60% 显示橙色"置信度低"警示，60% 以上显示正常置信度，失败时显示"未能识别"标签。
+- **折叠面板独立展开**：首页识别结果的"特征描述"、"养护方法"、"花语文化"三个折叠面板改为独立展开，互不干扰，用户可同时查看多个内容。
+- **问答记录用户隔离**：未登录用户不加载历史记录（显示空白对话）；已登录用户只加载自己的历史，不同账号数据完全隔离。
+- **问答自动重试**：问答失败后自动重试一次，两次均失败时显示友好的默认回答，而非抛出报错。
+- **问答时间显示**：消息时间今天只显示时分，非今天显示"月日 时分"。
+
+### 后台管理优化
+- **登录后自动跳转**：登录成功后自动重定向到用户管理列表，不再白屏。
+- **操作日志修复**：系统操作日志不再报 500 错误，修复了虚拟列（`details_preview`/`admin_name`）导致的查询异常。
+- **用户名列显示正确**：彻底修复了用户名被 JS 枚举翻译误伤的问题；role/status 列翻译改为 Python 端 `column_formatters` 处理，不再依赖 JS 匹配。
+- **按钮全面中文化**："+New 用户"→"添加新用户"，"+New 花卉"→"添加新花卉"；删除确认弹窗改为中文提示（"确定要删除此记录吗？此操作不可撤销。"）；保存/取消/返回等按钮均已中文化。
+- **编辑表单状态下拉**：角色（普通用户/专家/管理员）和状态（正常/已禁用/草稿/待审核/已发布）下拉选项均显示中文。
+- **管理员权限隔离**：管理员不能编辑或删除其他管理员账号，只能操作自己和非管理员用户。
+- **操作日志内容可读**：日志详情改为"编辑了 User（ID:5，内容：alice）"等友好描述，操作模块列显示中文名称。
+- **识别置信度容错**：后端解析 AI 返回的置信度支持字符串格式（正则提取数字），兜底值为 70%。
+
+---
 
 ## 技术栈
 
 ### 前端
 
-- **框架**: Vue 3 + TypeScript
-- **UI组件库**: Element Plus (核心组件响应式适配)
-- **状态管理**: Pinia
-- **构建工具**: Vite
-- **路由**: Vue Router (含导航守卫和角色权限管理)
+| 技术 | 说明 |
+|------|------|
+| Vue 3 + TypeScript | 核心框架，Composition API |
+| Element Plus | UI 组件库，响应式适配 |
+| Pinia | 全局状态管理 |
+| Vite | 构建工具 |
+| Vue Router | 路由管理，含导航守卫与角色权限 |
+| Axios | HTTP 请求，含 JWT 拦截器 |
+| marked | Markdown 渲染（问答回复） |
 
 ### 后端
 
-- **框架**: FastAPI (Python 3.8+)
-- **AI 引擎**: LangChain + DeepSeek-V3 / 多模态 Vision 模型 (如智谱 AI GLM-4.6V)
-- **数据库**: SQLAlchemy (支持异步操作，ORM 优化，如 `selectinload` 用于解决 N+1 问题)
-- **管理界面**: SQLAdmin (基于 Starlette 的管理后台)
-- **存储**: MinIO (对象存储，用于图片等文件)
-- **认证**: JWT (JSON Web Token)
-- **依赖管理**: `requirements.txt`
+| 技术 | 说明 |
+|------|------|
+| FastAPI (Python 3.10+) | 异步 Web 框架 |
+| SQLAlchemy (async) | ORM，`selectinload` 解决 N+1 |
+| SQLAdmin | 后台管理界面 |
+| aiosqlite / PostgreSQL | 数据库（可配置） |
+| MinIO | 对象存储，持久化识别图片 |
+| JWT | 用户认证 |
+| LangChain | AI 调用框架 |
+| 智谱 AI GLM-4.6V | 多模态花卉识别（Vision） |
+| DeepSeek-V3 | 文本科普生成与智能问答 |
+
+---
 
 ## 项目结构
 
 ```text
 HuaShiJie/
-├── flower-recognition-frontend/     # 前端 Vue 3 项目
+├── flower-recognition-frontend/       # 前端 Vue 3 项目
 │   ├── src/
-│   │   ├── api/                     # 后端 API 调用封装 (包含 admin 模块)
-│   │   ├── components/              # 通用业务组件
-│   │   ├── layout/                  # 页面布局组件
-│   │   ├── router/                  # 路由配置 (含导航守卫和 /admin 路由)
-│   │   ├── stores/                  # Pinia 状态管理
-│   │   └── views/                   # 页面视图 (首页、识别、问答、admin 等)
-│   └── vite.config.ts               # Vite 配置文件
-├── flower-recognition-backend/      # 后端 FastAPI 项目
+│   │   ├── api/                       # API 调用封装
+│   │   ├── components/                # 通用组件
+│   │   ├── layout/                    # 页面布局
+│   │   ├── router/                    # 路由与导航守卫
+│   │   ├── stores/                    # Pinia 状态
+│   │   └── views/                     # 页面视图
+│   │       ├── HomeView.vue           # 首页（上传识别、科普展示）
+│   │       ├── QAView.vue             # 智能问答
+│   │       ├── KnowledgeView.vue      # 花卉知识库
+│   │       ├── ProfileView.vue        # 个人中心
+│   │       └── ...
+│   └── vite.config.ts
+├── flower-recognition-backend/        # 后端 FastAPI 项目
 │   ├── app/
-│   │   ├── api/                     # 业务路由接口 (包含 admin 接口)
-│   │   ├── core/                    # 核心配置与安全逻辑 (含 get_current_admin)
-│   │   ├── models/                  # 数据库表与 Schema 定义 (Pydantic models for API)
-│   │   ├── services/                # AI、存储、数据库等核心服务
-│   ├── main.py                      # 后端应用启动入口 (FastAPI 应用、SQLAdmin 配置)
-│   └── requirements.txt             # 项目依赖列表
-└── README.md                        # 项目说明文档
+│   │   ├── api/                       # 路由接口
+│   │   │   ├── flower.py              # 识别接口（单张/批量，失败优雅降级）
+│   │   │   ├── qa.py                  # 问答接口
+│   │   │   ├── user.py                # 用户接口
+│   │   │   └── ...
+│   │   ├── models/
+│   │   │   └── tables.py              # 数据库表定义（含 AuditLog）
+│   │   └── services/
+│   │       ├── ai.py                  # AI 识别与问答服务
+│   │       └── storage.py             # MinIO 存储服务
+│   ├── templates/
+│   │   └── sqladmin/                  # 后台管理自定义模板
+│   │       ├── base.html              # 全局中文化脚本
+│   │       ├── index.html             # 登录后自动跳转
+│   │       ├── create.html            # 新增表单（中文按钮）
+│   │       └── edit.html              # 编辑表单（中文按钮）
+│   ├── main.py                        # 应用入口 + SQLAdmin 配置
+│   └── requirements.txt
+└── README.md
 ```
+
+---
 
 ## 核心功能
 
 ### 1. 智能花卉识别
 
-- **多模态分析**: 利用先进的多模态大模型，自动识别图片中的花卉名称、科属、颜色、花期等详细信息。
-- **批量处理**: 支持用户一次性上传多张图片，系统将进行并发识别，提高效率。
-- **置信度评分**: AI 模型自动为每个识别结果提供置信度评分，帮助用户评估结果的可靠性。
-- **历史记录**: 每个用户的识别记录都将持久化存储，方便用户随时回顾和管理。
+- 多模态大模型（GLM-4.6V）直接分析图片，识别花卉名称、科属、颜色、花期等。
+- 支持批量上传多张图片，逐一识别。
+- 识别失败时显示友好占位卡片，引导用户重拍或前往问答，不报错。
+- 置信度分级显示（正常 / 偏低 / 未识别）。
 
-### 2. 深度科普生成
+### 2. 深度科普展示
 
-- **全方位信息**: 为识别出的花卉提供详细的科普知识，包括其特征描述、生长习性、专业养护方法（如光照、水分、施肥等）、以及相关的花语文化背景。
-- **交互式查看**: 科普内容以折叠面板（Accordion）的形式展现，既保持了界面的简洁美观，又方便用户按需展开查看详细信息。
+- 识别成功后自动呈现特征描述、养护方法、花语文化三大模块。
+- 三个折叠面板**独立展开**，互不干扰，可同时查看任意组合。
+- 支持收藏、分享、跳转问答。
 
-### 3. 智能问答 (AI Chat)
+### 3. 智能问答
 
-- **上下文感知**: 用户可以围绕识别结果进行深度追问，AI 问答系统能够理解上下文，提供更精准的解答。
-- **历史回溯**: 用户的问答历史将自动保存，方便用户回顾过去的交流内容，持续学习。
+- 基于 DeepSeek-V3，支持上下文感知多轮对话。
+- 已登录用户自动加载本人历史，不同账号数据隔离。
+- 未登录用户每次会话从零开始。
+- 失败自动重试，最终失败显示友好默认回答。
+- 支持 Markdown 渲染回复内容。
 
 ### 4. 知识库与社区
 
-- **全局搜索**: 提供强大的搜索功能，用户可以快速检索各类花卉知识。
-- **互动评论**: 用户可以对花卉知识发表评论，与其他社区成员互动交流，并支持点赞功能。
-- **收藏夹**: 用户可以将自己喜欢的花卉或重要知识添加到收藏夹，实现跨设备同步，方便个人管理。
-- **后台管理**:
-    - **用户管理**: 管理系统用户，包括查看、编辑用户资料、角色管理等。
-    - **花卉百科管理**: 维护花卉知识库，进行花卉信息的增删改查。
-    - **识别记录管理**: 查看和管理用户识别历史，支持人工纠错。
-    - **问答历史管理**: 审核和管理用户与 AI 的问答记录。
-    - **内容审核管理**: 对用户评论进行审核和管理。
-    - **系统操作日志**: 记录管理员在后台的操作行为，便于审计。
+- 花卉知识全文搜索。
+- 评论、点赞、收藏功能。
+- 收藏数据云端同步，跨设备访问。
+
+### 5. 后台管理系统
+
+访问地址：`http://localhost:8000/admin`（需管理员账号）
+
+| 模块 | 功能 |
+|------|------|
+| 用户管理 | 查看、编辑用户资料；管理员权限隔离（不可互改） |
+| 花卉百科管理 | 增删改查花卉知识库 |
+| 识别记录管理 | 查看识别历史，支持人工纠错 |
+| 问答历史管理 | 审核用户与 AI 的对话记录 |
+| 内容审核管理 | 审核用户评论（待审核/通过/拒绝） |
+| 反馈与工单管理 | 处理用户反馈，支持回复 |
+| 系统操作日志 | 记录管理员所有操作（新增/编辑/删除），含操作人、模块、目标ID、时间、IP |
+
+---
 
 ## 配置说明
 
-### 1. 环境变量 (.env)
-
-在项目根目录 `flower-recognition-backend` 下创建 `.env` 文件，并配置以下变量：
+### 环境变量（`flower-recognition-backend/.env`）
 
 ```env
-DATABASE_URL=sqlite+aiosqlite:///./test.db  # 数据库连接字符串，可配置 PostgreSQL, MySQL 等
-SECRET_KEY=你的JWT密钥                     # 用于 JWT 认证的密钥，请替换为强随机字符串
-DEEPSEEK_API_KEY=你的DeepSeek_API_KEY       # DeepSeek AI API 密钥
-DEEPSEEK_BASE_URL=https://api.deepseek.com # DeepSeek API 基础 URL
-ZHIPU_API_KEY=你的智谱AI_API_KEY           # 智谱 AI API 密钥
+DATABASE_URL=sqlite+aiosqlite:///./test.db
+JWT_SECRET_KEY=你的JWT密钥（请替换为强随机字符串）
+DEEPSEEK_API_KEY=你的DeepSeek_API_KEY
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+ZHIPU_API_KEY=你的智谱AI_API_KEY
 ```
 
-### 2. MinIO 配置 (config.py)
-
-MinIO 存储服务的配置位于 `flower-recognition-backend/app/config.py`，请根据您的 MinIO 部署进行修改：
+### MinIO 配置（`app/config.py`）
 
 ```python
-MINIO_ENDPOINT="192.168.42.101:9000" # MinIO 服务地址和端口
-MINIO_ACCESS_KEY="minioadmin"       # MinIO Access Key
-MINIO_SECRET_KEY="minioadmin"       # MinIO Secret Key
-MINIO_BUCKET="flower-images"        # 存储花卉图片的桶名称
+MINIO_ENDPOINT   = "192.168.42.101:9000"
+MINIO_ACCESS_KEY = "minioadmin"
+MINIO_SECRET_KEY = "minioadmin"
+MINIO_BUCKET     = "flower-images"
 ```
 
-## 推荐模型建议
-
-对于**花卉识别 (Vision)** 任务，项目已默认接入：
-
-1.  **智谱 AI (GLM-4.6V)**: 通过 `zai-sdk` 实现高精度的多模态花卉识别，支持思考过程（Thinking）输出，提供详细的识别分析。
-2.  **DeepSeek-V3**: 主要用于处理文本相关的任务，包括深度科普信息生成和智能问答。
+---
 
 ## 启动方式
 
 ### 前端
 
-1.  进入前端项目目录：
-    ```bash
-    cd flower-recognition-frontend
-    ```
-2.  安装依赖：
-    ```bash
-    npm install
-    ```
-3.  启动开发服务器：
-    ```bash
-    npm run dev
-    ```
-    应用将在 `http://localhost:5173/` (或根据端口占用情况自动分配) 启动。
+```bash
+cd flower-recognition-frontend
+npm install
+npm run dev
+# 访问 http://localhost:5173
+```
 
 ### 后端
 
-1.  进入后端项目目录：
-    ```bash
-    cd flower-recognition-backend
-    ```
-2.  安装依赖：
-    ```bash
-    pip install -r requirements.txt
-    ```
-    **重要提示**: 如果在执行此步骤或后续启动命令时遇到 `Fatal Python error: init_fs_encoding: failed to get the Python codec of the filesystem encoding ModuleNotFoundError: No module named 'encodings'` 错误，这表明您的 Python 环境存在问题。这通常需要手动修复 Python 安装（例如，重新安装 Python 或重新创建虚拟环境）。请确保您的 Python 环境能够正常导入标准库。
+```bash
+cd flower-recognition-backend
+pip install -r requirements.txt
+uvicorn main:app --host 0.0.0.0 --port 8000
+# API:   http://localhost:8000
+# 后台:  http://localhost:8000/admin
+```
 
-3.  启动 FastAPI 服务器：
-    ```bash
-    uvicorn main:app --host 0.0.0.0 --port 8000
-    ```
-    后端 API 服务将在 `http://localhost:8000/` 启动。后台管理系统入口为 `http://localhost:8000/admin`。
+> **提示**：若启动时遇到 `ModuleNotFoundError: No module named 'encodings'`，说明 Python 环境损坏，请重新安装 Python 或重建虚拟环境。
+
+---
 
 ## 许可证
+
 MIT License

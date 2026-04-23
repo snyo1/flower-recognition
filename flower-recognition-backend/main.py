@@ -2,17 +2,19 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import os
+import json
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy import text
 from sqladmin import Admin, ModelView
 from sqladmin.authentication import AuthenticationBackend
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
+from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy import select
 from app.api import flower, qa, knowledge, auth, user, favorites, comments, feedbacks, admin
 from app.services.db import engine, AsyncSessionFactory
 from app.models.tables import Base, User, Flower, RecognitionRecord, Comment, Feedback, QAHistory, AuditLog, FlowerVersion
-from app.core.security import verify_password
+from app.core.security import verify_password, get_password_hash
 from app.services.storage import minio_service
 from markupsafe import Markup
 
@@ -20,13 +22,18 @@ load_dotenv()
 
 app = FastAPI(title="花卉识别与科普系统API")
 
-# 配置CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=os.getenv("JWT_SECRET_KEY", "seelevollerei"),
+    max_age=1800,
 )
 
 # 初始化数据库（如缺少新表则创建）
@@ -45,6 +52,26 @@ app.include_router(favorites.router)
 app.include_router(comments.router)
 app.include_router(feedbacks.router)
 app.include_router(admin.router)
+
+
+# ========== 审计日志工具函数 ==========
+async def log_audit(admin_id: int, action: str, target_type: str, target_id: int = None, details: str = None, ip_address: str = None):
+    """记录管理员操作到审计日志"""
+    try:
+        async with AsyncSessionFactory() as session:
+            log_entry = AuditLog(
+                admin_id=admin_id,
+                action=action,
+                target_type=target_type,
+                target_id=target_id or 0,
+                details=details,
+                ip_address=ip_address,
+            )
+            session.add(log_entry)
+            await session.commit()
+    except Exception as e:
+        print(f"[AuditLog] 写入失败: {e}")
+
 
 # Admin Authentication
 class AdminAuth(AuthenticationBackend):
@@ -87,17 +114,58 @@ authentication_backend = AdminAuth(secret_key=os.getenv("JWT_SECRET_KEY", "seele
 
 from sqlalchemy.orm import selectinload
 
-# Admin Interface Configuration
-admin = Admin(app, engine, title="花世界后台管理", authentication_backend=authentication_backend)
+admin_app = Admin(
+    app,
+    engine,
+    title="花世界后台管理",
+    authentication_backend=authentication_backend,
+    templates_dir=os.path.join(os.path.dirname(__file__), "templates"),
+)
 
-class UserAdmin(ModelView, model=User):
+
+# ========== 带审计日志的 ModelView 基类 ==========
+class AuditModelView(ModelView):
+    async def _get_admin_id(self, request: Request) -> int:
+        return request.session.get("user_id", 0)
+
+    async def _get_client_ip(self, request: Request) -> str:
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+        return request.client.host if request.client else "unknown"
+
+    async def after_model_change(self, data, model, is_created, request: Request) -> None:
+        admin_id = await self._get_admin_id(request)
+        if not admin_id:
+            return
+        ip = await self._get_client_ip(request)
+        action = "新增" if is_created else "编辑"
+        target_type = model.__class__.__name__
+        target_id = getattr(model, "id", None)
+        # 生成可读的描述
+        model_str = str(model)
+        details = f"{action}了 {target_type}（ID:{target_id}，内容：{model_str[:100]}）"
+        await log_audit(admin_id, action, target_type, target_id, details, ip)
+
+    async def after_model_delete(self, model, request: Request) -> None:
+        admin_id = await self._get_admin_id(request)
+        if not admin_id:
+            return
+        ip = await self._get_client_ip(request)
+        target_type = model.__class__.__name__
+        target_id = getattr(model, "id", None)
+        model_str = str(model)
+        details = f"删除了 {target_type}（ID:{target_id}，内容：{model_str[:100]}）"
+        await log_audit(admin_id, "删除", target_type, target_id, details, ip)
+
+
+class UserAdmin(AuditModelView, model=User):
     column_list = [
         "id",
         "username",
         "email",
         "role",
         "status",
-        "is_active",
         "registration_date",
         "last_login_at",
         "last_login_ip",
@@ -107,85 +175,138 @@ class UserAdmin(ModelView, model=User):
         "id": "ID",
         "username": "用户名",
         "email": "邮箱",
+        "password_hash": "密码",
         "role": "角色",
         "status": "状态",
-        "is_active": "是否活跃",
         "registration_date": "注册日期",
         "last_login_at": "上次登录",
         "last_login_ip": "上次登录IP",
         "recognition_count": "识别次数",
-        "actions": "操作" # Adding "操作" label for the actions column
+        "profile": "用户资料",
+        "recognitions": "识别记录",
+        "comments": "评论",
+        "feedbacks": "反馈",
+        "qa_histories": "问答历史",
+        "expert_application": "专家申请",
     }
     column_searchable_list = ["username", "email"]
-    column_filters = [] # 暂时清空以恢复访问
+    column_filters = []
     name = "用户"
     name_plural = "用户管理"
-    # 操作按钮翻译
-    can_create = True # 新增
-    can_edit = True # 编辑
-    can_delete = True # 删除
-    can_export = True # 导出
-    # "详情" (Show) 的翻译可能需要覆盖模板或使用column_formatters创建链接
+    icon = "fa-solid fa-users"
+    can_create = True
+    can_edit = True
+    can_delete = True
+    can_export = True
+
+    form_excluded_columns = [
+        "recognitions",
+        "comments",
+        "feedbacks",
+        "qa_histories",
+        "expert_application",
+        "profile",
+        "registration_date",
+        "last_login_at",
+        "last_login_ip",
+    ]
+
+    form_include_pk = False
+
+    async def on_model_change(self, data, model, is_created, request):
+        current_admin_id = request.session.get("user_id", 0)
+        # 禁止修改其他管理员账号（本人除外）
+        if not is_created and hasattr(model, "role") and model.role == "admin":
+            if model.id != current_admin_id:
+                raise Exception("权限不足：不允许修改其他管理员账号")
+        if is_created:
+            if "password_hash" in data and data["password_hash"]:
+                data["password_hash"] = get_password_hash(data["password_hash"])
+                model.password_hash = data["password_hash"]
+            else:
+                model.password_hash = get_password_hash("123456")
+        elif "password_hash" in data and data["password_hash"]:
+            if not data["password_hash"].startswith("$2b$"):
+                data["password_hash"] = get_password_hash(data["password_hash"])
+                model.password_hash = data["password_hash"]
+
+    async def delete_model(self, request: Request, pk: str):
+        current_admin_id = request.session.get("user_id", 0)
+        async with AsyncSessionFactory() as session:
+            target = await session.get(User, int(pk))
+            if target and target.role == "admin" and target.id != current_admin_id:
+                raise Exception("权限不足：不允许删除其他管理员账号")
+        return await super().delete_model(request, pk)
 
     def get_query(self):
         return super().get_query().options(selectinload(User.recognitions))
 
-    def get_one_query(self):
-        return self.session.query(User).options(selectinload(User.recognitions))
-
     column_formatters = {
         "recognition_count": lambda m, a: len(m.recognitions) if m.recognitions else 0,
-        "email": lambda m, a: f"{m.email[:3]}****{m.email[-4:]}" if m.email and "@" in m.email else m.email
+        "email": lambda m, a: f"{m.email[:3]}****{m.email[-4:]}" if m.email and "@" in m.email and len(m.email) > 7 else m.email,
+        "role": lambda m, a: {"user": "普通用户", "expert": "专家", "admin": "管理员"}.get(m.role, m.role),
+        "status": lambda m, a: {"active": "正常", "disabled": "已禁用"}.get(m.status, m.status),
     }
 
-class FlowerAdmin(ModelView, model=Flower):
+
+class FlowerAdmin(AuditModelView, model=Flower):
     column_list = [
-        "id", 
-        "name", 
-        "family", 
+        "id",
+        "name",
+        "family",
         "plant_type",
         "status",
-        "created_at"
+        "created_at",
     ]
     column_labels = {
         "id": "ID",
         "name": "名称",
         "family": "科属",
+        "color": "颜色",
+        "blooming_period": "花期",
         "plant_type": "类型",
         "status": "状态",
         "created_at": "录入时间",
+        "updated_at": "更新时间",
         "description": "描述",
         "care_guide": "养护指南",
         "flower_language": "花语",
         "tags": "标签",
-        "actions": "操作" # 添加操作列的标题
+        "recognitions": "识别记录",
+        "comments": "评论",
     }
     column_searchable_list = ["name", "family", "tags"]
     column_filters = []
-    # 操作按钮翻译
-    can_export = True # 导出
-    can_create = True # 新增
-    can_edit = True # 编辑
-    can_delete = True # 删除
-    # "详情" (Show) 的翻译可能需要覆盖模板或使用column_formatters创建链接
+    can_export = True
+    can_create = True
+    can_edit = True
+    can_delete = True
     name = "花卉"
     name_plural = "花卉百科"
-    
+    icon = "fa-solid fa-seedling"
+
+    form_excluded_columns = ["recognitions", "comments", "created_at", "updated_at"]
+
     form_widget_args = {
         "description": {"rows": 10},
         "care_guide": {"rows": 10},
         "flower_language": {"rows": 5},
     }
 
-class RecognitionAdmin(ModelView, model=RecognitionRecord):
+    column_formatters = {
+        "status": lambda m, a: {"draft": "草稿", "pending": "待审核", "published": "已发布"}.get(m.status, m.status),
+    }
+
+
+class RecognitionAdmin(AuditModelView, model=RecognitionRecord):
     column_list = [
-        "id", 
+        "id",
         "user_name",
-        "flower_name", 
-        "confidence", 
+        "flower_name",
+        "confidence",
         "image_preview",
         "is_corrected",
-        "created_at"
+        "created_at",
     ]
     column_labels = {
         "id": "ID",
@@ -193,171 +314,246 @@ class RecognitionAdmin(ModelView, model=RecognitionRecord):
         "flower_name": "识别结果",
         "confidence": "置信度",
         "image_preview": "图片预览",
+        "image_url": "图片地址",
         "is_corrected": "已纠错",
         "created_at": "时间",
-        "actions": "操作" # 添加操作列的标题
+        "user": "用户",
+        "flower": "花卉",
+        "corrected_flower": "纠正后花卉",
+        "plant_id": "花卉ID",
+        "user_id": "用户ID",
+        "corrected_plant_id": "纠正后花卉ID",
     }
     column_sortable_list = ["id", "confidence", "created_at"]
+    column_searchable_list = []
     column_filters = []
-    # 操作按钮翻译
-    can_create = False # 不允许通过管理界面创建
-    can_edit = True # 编辑 (用于人工纠错)
-    can_delete = False # 不允许通过管理界面删除
-    can_export = True # 允许导出
-    # "详情" (Show) 的翻译可能需要覆盖模板或使用column_formatters创建链接
+    can_create = False
+    can_edit = True
+    can_delete = True
+    can_export = True
     name = "识别"
     name_plural = "识别记录管理"
+    icon = "fa-solid fa-magnifying-glass"
 
     def get_query(self):
-        return super().get_query().options(selectinload(RecognitionRecord.user), selectinload(RecognitionRecord.flower))
-
-    def get_one_query(self):
-        return self.session.query(RecognitionRecord).options(selectinload(RecognitionRecord.user), selectinload(RecognitionRecord.flower))
+        return super().get_query().options(
+            selectinload(RecognitionRecord.user),
+            selectinload(RecognitionRecord.flower),
+        )
 
     column_formatters = {
         "user_name": lambda m, a: m.user.username if m.user else "游客",
         "flower_name": lambda m, a: m.flower.name if m.flower else "未知",
-        "image_preview": lambda m, a: Markup(f'<img src="{minio_service.get_url(m.image_url)}" width="100" />') if m.image_url else ""
+        "image_preview": lambda m, a: Markup(
+            f'<img src="{minio_service.get_url(m.image_url)}" width="100" />'
+        )
+        if m.image_url
+        else "",
     }
 
-class QAHistoryAdmin(ModelView, model=QAHistory):
-    column_list = ["id", "user_name", "question", "created_at"]
+
+class QAHistoryAdmin(AuditModelView, model=QAHistory):
+    column_list = ["id", "user_name", "question_preview", "answer_preview", "created_at"]
     column_labels = {
         "id": "ID",
         "user_name": "用户",
         "question": "提问内容",
+        "question_preview": "提问内容",
+        "answer": "回答内容",
+        "answer_preview": "回答内容",
         "created_at": "提问时间",
-        "actions": "操作" # 添加操作列的标题
+        "user": "用户",
+        "user_id": "用户ID",
     }
     column_searchable_list = ["question"]
-    # 操作按钮翻译
-    can_create = False # 不允许通过管理界面创建
-    can_edit = False # 不允许通过管理界面编辑
-    can_delete = True # 允许删除
-    can_export = True # 允许导出
-    # "详情" (Show) 的翻译可能需要覆盖模板或使用column_formatters创建链接
+    can_create = False
+    can_edit = False
+    can_delete = True
+    can_export = True
+    can_view_details = True
     name = "问答"
     name_plural = "问答历史管理"
+    icon = "fa-solid fa-comments"
+
+    column_formatters = {
+        "user_name": lambda m, a: m.user.username if m.user else "游客",
+        "question_preview": lambda m, a: Markup(
+            f'<div style="max-width:300px;white-space:normal;word-break:break-all;line-height:1.5;">{(m.question[:100] + "...") if m.question and len(m.question) > 100 else (m.question or "")}</div>'
+        ),
+        "answer_preview": lambda m, a: Markup(
+            f'<div style="max-width:400px;white-space:normal;word-break:break-all;line-height:1.5;">{(m.answer[:150] + "...") if m.answer and len(m.answer) > 150 else (m.answer or "")}</div>'
+        ),
+    }
+
+    column_formatters_detail = {
+        "question": lambda m, a: Markup(
+            f'<div style="white-space:pre-wrap;word-break:break-all;line-height:1.8;max-width:600px;">{m.question or ""}</div>'
+        ),
+        "answer": lambda m, a: Markup(
+            f'<div style="white-space:pre-wrap;word-break:break-all;line-height:1.8;max-width:600px;">{m.answer or ""}</div>'
+        ),
+        "user_name": lambda m, a: m.user.username if m.user else "游客",
+    }
 
     def get_query(self):
         return super().get_query().options(selectinload(QAHistory.user))
 
-    def get_one_query(self):
-        return self.session.query(QAHistory).options(selectinload(QAHistory.user))
-
-    column_formatters = {
-        "user_name": lambda m, a: m.user.username if m.user else "游客"
-    }
-
-class CommentAdmin(ModelView, model=Comment):
-    column_list = ["id", "user_name", "flower_name", "content", "status", "created_at"]
+class CommentAdmin(AuditModelView, model=Comment):
+    column_list = ["id", "user_name", "flower_name", "content_preview", "status", "created_at"]
     column_labels = {
         "id": "ID",
         "user_name": "用户",
         "flower_name": "关联花卉",
         "content": "评论内容",
+        "content_preview": "评论内容",
         "status": "状态",
         "created_at": "时间",
-        "actions": "操作" # 添加操作列的标题
+        "user": "用户",
+        "flower": "花卉",
+        "user_id": "用户ID",
+        "flower_id": "花卉ID",
     }
+    column_searchable_list = ["content"]
     column_filters = []
-    # 操作按钮翻译
-    can_create = False # 不允许通过管理界面创建
-    can_edit = True # 允许编辑 (例如审核状态)
-    can_delete = True # 允许删除
-    can_export = True # 允许导出
-    # "详情" (Show) 的翻译可能需要覆盖模板或使用column_formatters创建链接
+    can_create = False
+    can_edit = True
+    can_delete = True
+    can_export = True
+    can_view_details = True
     name = "评论"
     name_plural = "内容审核管理"
-
-    def get_query(self):
-        return super().get_query().options(selectinload(Comment.user), selectinload(Comment.flower))
-
-    def get_one_query(self):
-        return self.session.query(Comment).options(selectinload(Comment.user), selectinload(Comment.flower))
+    icon = "fa-solid fa-shield-halved"
 
     column_formatters = {
         "user_name": lambda m, a: m.user.username if m.user else "系统",
-        "flower_name": lambda m, a: m.flower.name if m.flower else "未知"
+        "flower_name": lambda m, a: m.flower.name if m.flower else "未知",
+        "status": lambda m, a: {"pending": "待审核", "approved": "已通过", "rejected": "已拒绝"}.get(m.status, m.status),
+        "content_preview": lambda m, a: Markup(
+            f'<div style="max-width:400px;white-space:normal;word-break:break-all;line-height:1.5;">{(m.content[:100] + "...") if m.content and len(m.content) > 100 else (m.content or "")}</div>'
+        ),
     }
 
-class FeedbackAdmin(ModelView, model=Feedback):
-    column_list = ["id", "user_name", "content", "status", "created_at"]
+    column_formatters_detail = {
+        "content": lambda m, a: Markup(
+            f'<div style="white-space:pre-wrap;word-break:break-all;line-height:1.8;max-width:600px;">{m.content or ""}</div>'
+        ),
+        "user_name": lambda m, a: m.user.username if m.user else "系统",
+        "flower_name": lambda m, a: m.flower.name if m.flower else "未知",
+    }
+
+    def get_query(self):
+        return super().get_query().options(
+            selectinload(Comment.user), selectinload(Comment.flower)
+        )
+
+class FeedbackAdmin(AuditModelView, model=Feedback):
+    column_list = ["id", "user_name", "content_preview", "status", "created_at"]
     column_labels = {
         "id": "ID",
         "user_name": "反馈用户",
         "content": "反馈内容",
+        "content_preview": "反馈内容",
         "status": "状态",
         "created_at": "时间",
-        "actions": "操作" # 添加操作列的标题
+        "reply_content": "回复内容",
+        "processed_at": "处理时间",
+        "user": "用户",
+        "user_id": "用户ID",
+        "flower_id": "花卉ID",
     }
     column_filters = []
-    # 操作按钮翻译
-    can_create = False # 不允许通过管理界面创建
-    can_edit = True # 允许编辑 (例如处理状态)
-    can_delete = True # 允许删除
-    can_export = True # 允许导出
-    # "详情" (Show) 的翻译可能需要覆盖模板或使用column_formatters创建链接
+    can_create = False
+    can_edit = True
+    can_delete = True
+    can_export = True
+    can_view_details = True
     name = "反馈"
     name_plural = "反馈与工单管理"
+    icon = "fa-solid fa-clipboard-list"
+
+    column_formatters = {
+        "user_name": lambda m, a: m.user.username if m.user else "匿名",
+        "status": lambda m, a: {"pending": "待处理", "processing": "处理中", "resolved": "已解决", "closed": "已关闭"}.get(m.status, m.status),
+        "content_preview": lambda m, a: Markup(
+            f'<div style="max-width:400px;white-space:normal;word-break:break-all;line-height:1.5;">{(m.content[:100] + "...") if m.content and len(m.content) > 100 else (m.content or "")}</div>'
+        ),
+    }
+
+    column_formatters_detail = {
+        "content": lambda m, a: Markup(
+            f'<div style="white-space:pre-wrap;word-break:break-all;line-height:1.8;max-width:600px;">{m.content or ""}</div>'
+        ),
+        "reply_content": lambda m, a: Markup(
+            f'<div style="white-space:pre-wrap;word-break:break-all;line-height:1.8;max-width:600px;">{m.reply_content or ""}</div>'
+        ),
+        "user_name": lambda m, a: m.user.username if m.user else "匿名",
+    }
 
     def get_query(self):
         return super().get_query().options(selectinload(Feedback.user))
 
-    def get_one_query(self):
-        return self.session.query(Feedback).options(selectinload(Feedback.user))
-
-    column_formatters = {
-        "user_name": lambda m, a: m.user.username if m.user else "匿名"
-    }
-
 class AuditLogAdmin(ModelView, model=AuditLog):
-    column_list = ["id", "admin_name", "action", "target_type", "created_at"]
+    # 只使用真实模型字段，不用虚拟列，避免 sqladmin 查询报错
+    column_list = ["id", "admin_id", "action", "target_type", "target_id", "details", "ip_address", "created_at"]
     column_labels = {
         "id": "ID",
-        "admin_name": "管理员",
-        "action": "动作",
-        "target_type": "目标类型",
-        "created_at": "时间",
-        "actions": "操作" # 添加操作列的标题
+        "admin_id": "管理员",
+        "action": "操作类型",
+        "target_type": "操作模块",
+        "target_id": "目标ID",
+        "details": "操作详情",
+        "ip_address": "IP地址",
+        "created_at": "操作时间",
+        "admin": "管理员",
     }
-    name = "审计"
+    column_sortable_list = ["id", "created_at"]
+    column_searchable_list = ["action", "target_type"]
+    name = "日志"
     name_plural = "系统操作日志"
-    # 操作按钮翻译
-    can_create = False # 审计日志不允许创建
-    can_edit = False # 审计日志不允许编辑
-    can_delete = False # 审计日志不允许删除
-    can_export = True # 允许导出
-    # "详情" (Show) 的翻译可能需要覆盖模板或使用column_formatters创建链接
+    icon = "fa-solid fa-clock-rotate-left"
+    can_create = False
+    can_edit = False
+    can_delete = False
+    can_export = True
 
+    # 模块名称映射
+    _module_names = {
+        "User": "用户管理",
+        "Flower": "花卉百科",
+        "RecognitionRecord": "识别记录",
+        "QAHistory": "问答历史",
+        "Comment": "内容审核",
+        "Feedback": "反馈工单",
+    }
+
+    column_formatters = {
+        "admin_id": lambda m, a: (m.admin.username if m.admin else f"管理员#{m.admin_id}"),
+        "target_type": lambda m, a: AuditLogAdmin._module_names.get(m.target_type, m.target_type),
+        "details": lambda m, a: Markup(
+            f'<div style="max-width:350px;white-space:normal;word-break:break-all;line-height:1.5;">'
+            f'{(m.details[:120] + "...") if m.details and len(m.details) > 120 else (m.details or "-")}'
+            f'</div>'
+        ),
+    }
 
     def get_query(self):
         return super().get_query().options(selectinload(AuditLog.admin))
 
-    column_formatters = {
-        "admin_name": lambda m, a: m.admin.username if m.admin else "未知"
-    }
-
-admin.add_view(UserAdmin)
-admin.add_view(FlowerAdmin)
-admin.add_view(RecognitionAdmin)
-admin.add_view(QAHistoryAdmin)
-admin.add_view(CommentAdmin)
-# admin.add_view(FeedbackAdmin)
-admin.add_view(AuditLogAdmin)
+admin_app.add_view(UserAdmin)
+admin_app.add_view(FlowerAdmin)
+admin_app.add_view(RecognitionAdmin)
+admin_app.add_view(QAHistoryAdmin)
+admin_app.add_view(CommentAdmin)
+admin_app.add_view(AuditLogAdmin)
 
 
 @app.get("/api/health")
 async def health():
     return {"status": "ok"}
 
-# 根路由直接重定向到 admin (或者保持空，让用户访问 /admin)
-# 用户要求后端启动后直接进入后台管理员页面，这里我们让 / 重定向到 /admin
-from fastapi.responses import RedirectResponse
-
 @app.get("/")
 async def root():
-    return RedirectResponse(url="/admin")
+    return RedirectResponse(url="/admin/user/list")
 
 if __name__ == "__main__":
     import uvicorn

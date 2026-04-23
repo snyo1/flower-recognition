@@ -102,51 +102,68 @@
                         class="result-image"
                         :preview-src-list="[res.imagePreview || previewUrls[idx]]"
                       />
-                      <div class="confidence-tag">
+                      <div class="confidence-tag" v-if="res.failed">
+                        未能识别
+                      </div>
+                      <div class="confidence-tag" v-else-if="res.confidence > 0 && res.confidence < 60" style="background:rgba(255,150,0,0.75)">
+                        置信度低: {{ res.confidence }}%
+                      </div>
+                      <div class="confidence-tag" v-else-if="res.confidence >= 60">
                         置信度: {{ res.confidence }}%
                       </div>
                     </div>
 
                     <!-- 结果卡片右侧：信息 -->
                     <div class="result-info-box">
-                      <div class="info-header">
-                        <h2 class="flower-name">{{ res.name }}</h2>
-                        <el-tag size="small" effect="plain">{{ res.family }}</el-tag>
+                      <!-- 识别失败提示 -->
+                      <div v-if="res.failed" class="failed-result">
+                        <el-icon :size="40" color="#e6a23c"><Warning /></el-icon>
+                        <h3 class="failed-title">未能识别该花卉</h3>
+                        <p class="failed-desc">图片可能不清晰或花卉特征不明显，建议重新拍摄更清晰的照片后重试。</p>
+                        <el-button size="small" type="primary" :icon="ChatDotRound" @click="goToQAByName('花卉')">前往问答</el-button>
                       </div>
 
-                      <el-descriptions :column="1" size="small" border class="info-desc">
-                        <el-descriptions-item label="颜色">{{ res.color }}</el-descriptions-item>
-                        <el-descriptions-item label="花期">{{ res.bloomingPeriod }}</el-descriptions-item>
-                      </el-descriptions>
+                      <!-- 正常识别结果 -->
+                      <template v-else>
+                        <div class="info-header">
+                          <h2 class="flower-name">{{ res.name }}</h2>
+                          <el-tag size="small" effect="plain">{{ res.family }}</el-tag>
+                        </div>
 
-                      <div class="info-content">
-                        <el-collapse accordion>
-                          <el-collapse-item title="特征描述" :name="'desc' + idx">
-                            <p class="content-p">{{ res.description }}</p>
-                          </el-collapse-item>
-                          <el-collapse-item title="养护方法" :name="'care' + idx">
-                            <p class="content-p">{{ res.careGuide }}</p>
-                          </el-collapse-item>
-                          <el-collapse-item title="花语文化" :name="'lang' + idx">
-                            <p class="content-p">{{ res.flowerLanguage }}</p>
-                          </el-collapse-item>
-                        </el-collapse>
-                      </div>
+                        <el-descriptions :column="1" size="small" border class="info-desc">
+                          <el-descriptions-item label="颜色">{{ res.color }}</el-descriptions-item>
+                          <el-descriptions-item label="花期">{{ res.bloomingPeriod }}</el-descriptions-item>
+                        </el-descriptions>
 
-                      <div class="info-footer">
-                        <el-button-group>
-                          <el-button 
-                            size="small" 
-                            :type="res.isFavorite ? 'warning' : 'default'"
-                            :icon="res.isFavorite ? Check : Star" 
-                            @click="toggleFavorite(res)"
-                          >
-                            {{ res.isFavorite ? '已收藏' : '收藏' }}
-                          </el-button>
-                          <el-button size="small" :icon="Share" @click="shareResult(res)">分享</el-button>
-                          <el-button size="small" type="primary" :icon="ChatDotRound" @click="goToQA(res)">问答</el-button>
-                        </el-button-group>
-                      </div>
+                        <div class="info-content">
+                          <el-collapse>
+                            <el-collapse-item title="特征描述" :name="'desc' + idx">
+                              <p class="content-p">{{ res.description }}</p>
+                            </el-collapse-item>
+                            <el-collapse-item title="养护方法" :name="'care' + idx">
+                              <p class="content-p">{{ res.careGuide }}</p>
+                            </el-collapse-item>
+                            <el-collapse-item title="花语文化" :name="'lang' + idx">
+                              <p class="content-p">{{ res.flowerLanguage }}</p>
+                            </el-collapse-item>
+                          </el-collapse>
+                        </div>
+
+                        <div class="info-footer">
+                          <el-button-group>
+                            <el-button
+                              size="small"
+                              :type="res.isFavorite ? 'warning' : 'default'"
+                              :icon="res.isFavorite ? Check : Star"
+                              @click="toggleFavorite(res)"
+                            >
+                              {{ res.isFavorite ? '已收藏' : '收藏' }}
+                            </el-button>
+                            <el-button size="small" :icon="Share" @click="shareResult(res)">分享</el-button>
+                            <el-button size="small" type="primary" :icon="ChatDotRound" @click="goToQA(res)">问答</el-button>
+                          </el-button-group>
+                        </div>
+                      </template>
                     </div>
                   </div>
                 </el-card>
@@ -172,6 +189,7 @@ import {
   Star,
   Share,
   ChatDotRound,
+  Warning,
   User
 } from '@element-plus/icons-vue'
 import type { UploadInstance, UploadProps } from 'element-plus'
@@ -199,6 +217,7 @@ interface RecognitionResult {
   confidence: number
   imagePreview?: string
   isFavorite?: boolean
+  failed?: boolean
 }
 
 const results = ref<RecognitionResult[]>([])
@@ -241,7 +260,7 @@ const compressImage = (file: File): Promise<File> => {
         const canvas = document.createElement('canvas')
         let width = img.width
         let height = img.height
-        const maxSide = 1280 // 识别用的图片可以稍大一点，保持细节
+        const maxSide = 800
 
         if (width > height) {
           if (width > maxSide) {
@@ -270,7 +289,7 @@ const compressImage = (file: File): Promise<File> => {
           } else {
             reject(new Error('Canvas to Blob failed'))
           }
-        }, 'image/jpeg', 0.8)
+        }, 'image/jpeg', 0.6)
       }
       img.onerror = reject
     }
@@ -314,6 +333,7 @@ const identifyFlower = async () => {
         'Content-Type': 'multipart/form-data',
         ...(token ? { Authorization: `Bearer ${token}` } : {})
       },
+      timeout: 45000,
       onUploadProgress: (progressEvent) => {
         if (progressEvent.total) {
           uploadProgress.value = Math.round((progressEvent.loaded * 100) / progressEvent.total)
@@ -326,11 +346,26 @@ const identifyFlower = async () => {
     } else {
       results.value = [response.data]
     }
-    
+
     ElMessage.success('识别完成！')
   } catch (error) {
     console.error('识别失败:', error)
-    ElMessage.error('识别过程中出现错误，请稍后重试')
+    // 识别失败时为每张图片生成"未识别"占位结果，而不是直接报错
+    const failedResults: RecognitionResult[] = previewUrls.value.map((url) => ({
+      name: '未识别',
+      family: '-',
+      color: '-',
+      bloomingPeriod: '-',
+      description: '-',
+      careGuide: '-',
+      flowerLanguage: '-',
+      confidence: 0,
+      imagePreview: url,
+      isFavorite: false,
+      failed: true,
+    }))
+    results.value = failedResults
+    ElMessage.warning('识别服务暂时不可用，请稍后重试')
   } finally {
     identifying.value = false
   }
@@ -348,6 +383,10 @@ const goToQA = (res: RecognitionResult) => {
     path: '/qa',
     query: { flower: res.name }
   })
+}
+
+const goToQAByName = (name: string) => {
+  router.push({ path: '/qa', query: { flower: name } })
 }
 
 const toggleFavorite = async (res: RecognitionResult) => {
@@ -598,6 +637,30 @@ const triggerFileUpload = () => {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.failed-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 20px;
+  text-align: center;
+  height: 100%;
+}
+
+.failed-title {
+  font-size: 16px;
+  color: #e6a23c;
+  margin: 0;
+}
+
+.failed-desc {
+  font-size: 13px;
+  color: #888;
+  margin: 0;
+  line-height: 1.6;
 }
 
 .info-header {

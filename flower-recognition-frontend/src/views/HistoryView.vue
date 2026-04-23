@@ -42,7 +42,7 @@
                       <h3 class="flower-name">{{ item.flowerName }}</h3>
                       <p class="flower-family">{{ item.family }}</p>
                       <div class="flower-tags">
-                        <el-tag size="small" type="success">置信度 {{ item.confidence }}%</el-tag>
+                        <el-tag v-if="item.confidence >= 80" size="small" type="success">置信度 {{ item.confidence }}%</el-tag>
                         <el-tag size="small" type="info">{{ item.color }}</el-tag>
                         <el-tag size="small">{{ item.bloomingPeriod }}</el-tag>
                       </div>

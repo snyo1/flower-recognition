@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <link rel="stylesheet" href="{{ url_for('admin:statics', path='css/tabler.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('admin:statics', path='css/tabler-icons.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('admin:statics', path='css/fontawesome.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('admin:statics', path='css/select2.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('admin:statics', path='css/flatpickr.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('admin:statics', path='css/main.css') }}">
+  {% if admin.favicon_url %}
+  <link rel="icon" href="{{ admin.favicon_url }}">
+  {% endif %}
+  {% block head %}
+  {% endblock %}
+  <title>{{ admin.title }}</title>
+</head>
+
+<body>
+  {% block body %}
+  <main>
+    {% block main %}
+    {% endblock %}
+  </main>
+  {% endblock %}
+  <script type="text/javascript" src="{{ url_for('admin:statics', path='js/jquery.min.js') }}"></script>
+  <script type="text/javascript" src="{{ url_for('admin:statics', path='js/tabler.min.js') }}"></script>
+  <script type="text/javascript" src="{{ url_for('admin:statics', path='js/popper.min.js') }}"></script>
+  <script type="text/javascript" src="{{ url_for('admin:statics', path='js/bootstrap.min.js') }}"></script>
+  <script type="text/javascript" src="{{ url_for('admin:statics', path='js/select2.full.min.js') }}"></script>
+  <script type="text/javascript" src="{{ url_for('admin:statics', path='js/flatpickr.min.js') }}"></script>
+  <script type="text/javascript" src="{{ url_for('admin:statics', path='js/main.js') }}"></script>
+  <script>
+  $(function(){
+
+    // ===== 1. select option 枚举值翻译（仅对 <select> 的 option，不动 td） =====
+    // role 和 status 列表显示已由 Python column_formatters 处理，
+    // 这里只处理编辑表单中 <select> 下拉的枚举选项
+    var enumOptionMap = {
+      'active':     '正常',
+      'disabled':   '已禁用',
+      'draft':      '草稿',
+      'pending':    '待审核',
+      'published':  '已发布',
+      'approved':   '已通过',
+      'rejected':   '已拒绝',
+      'processing': '处理中',
+      'resolved':   '已解决',
+      'closed':     '已关闭',
+      'user':       '普通用户',
+      'expert':     '专家',
+      'admin':      '管理员',
+      'register':   '注册',
+      'reset':      '重置密码',
+    };
+
+    function translateSelectOptions() {
+      $('select option').each(function() {
+        var val = $(this).val();
+        if (enumOptionMap[val] !== undefined) {
+          $(this).text(enumOptionMap[val]);
+        }
+      });
+      // select2 渲染后的已选中项气泡
+      $('.select2-selection__rendered').each(function() {
+        var txt = $(this).attr('title') || $(this).text().trim();
+        if (enumOptionMap[txt] !== undefined) {
+          $(this).text(enumOptionMap[txt]);
+        }
+      });
+    }
+    translateSelectOptions();
+
+    // select2 下拉打开时翻译浮层选项
+    $(document).on('select2:open', function() {
+      setTimeout(function() {
+        $('.select2-results__option').each(function() {
+          var txt = $(this).text().trim();
+          if (enumOptionMap[txt] !== undefined) {
+            $(this).text(enumOptionMap[txt]);
+          }
+        });
+      }, 80);
+    });
+
+    // ===== 2. "添加新用户" / "添加新花卉" 按钮 =====
+    // sqladmin 生成的新增按钮文字为 "+ New 用户" / "+ New 花卉"
+    $('a.btn').each(function() {
+      var txt = $(this).text().trim();
+      // 匹配 "+ New XXX" 形式
+      if (/^\+\s*New\s+/.test(txt)) {
+        var name = txt.replace(/^\+\s*New\s+/, '').trim();
+        $(this).html('<svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 5l0 14"/><path d="M5 12l14 0"/></svg> 添加新' + name);
+      }
+    });
+
+    // ===== 3. 删除确认弹窗中文化 =====
+    // sqladmin 使用 Bootstrap modal，拦截 confirm 弹窗
+    // 覆盖列表行内"Delete"按钮的 confirm 对话框
+    $(document).on('click', '[data-bs-toggle="modal"]', function() {
+      setTimeout(function() {
+        // 翻译弹窗标题
+        $('.modal-title').each(function() {
+          var t = $(this).text().trim();
+          if (t === 'Please confirm') $(this).text('请确认操作');
+        });
+        // 翻译弹窗正文
+        $('.modal-body p').each(function() {
+          var t = $(this).text().trim();
+          if (t.indexOf('Are you sure you want to delete') !== -1) {
+            $(this).text('确定要删除此记录吗？此操作不可撤销。');
+          }
+        });
+        // 翻译弹窗按钮
+        $('.modal-footer .btn-danger').each(function() {
+          if ($(this).text().trim() === 'Delete') $(this).text('确认删除');
+        });
+        $('.modal-footer .btn-secondary').each(function() {
+          var t = $(this).text().trim();
+          if (t === 'Cancel' || t === 'Close') $(this).text('取消');
+        });
+        // 翻译批量操作确认弹窗
+        $('.modal-body').each(function() {
+          var html = $(this).html();
+          if (html.indexOf('Are you sure') !== -1) {
+            $(this).html(html
+              .replace(/Are you sure you want to delete these \d+ items\?/g, '确定要删除选中的记录吗？此操作不可撤销。')
+              .replace(/Are you sure you want to delete this item\?/g, '确定要删除此记录吗？此操作不可撤销。')
+            );
+          }
+        });
+      }, 50);
+    });
+
+    // ===== 4. 图标按钮 title 翻译（操作列的查看/编辑/删除） =====
+    var titleMap = { 'View': '查看详情', 'Edit': '编辑', 'Delete': '删除' };
+    $('[title]').each(function() {
+      var ti = $(this).attr('title');
+      if (titleMap[ti]) $(this).attr('title', titleMap[ti]);
+    });
+
+    // ===== 5. 搜索框 placeholder =====
+    $('input[placeholder="Search:"]').attr('placeholder', '搜索：');
+    $('input[placeholder="Enter value"]').attr('placeholder', '请输入值');
+    $('[placeholder="Select operation..."]').attr('placeholder', '选择操作...');
+
+    // ===== 6. 导出按钮 =====
+    $('a:contains("Export"), button:contains("Export")').each(function() {
+      if ($(this).text().trim() === 'Export') $(this).text('导出');
+    });
+
+    // ===== 7. 批量操作下拉文字 =====
+    $('select option:contains("Actions")').each(function(){
+      if ($(this).text().trim() === 'Actions') $(this).text('批量操作');
+    });
+    $('select option:contains("Delete selected")').each(function(){
+      if ($(this).text().indexOf('Delete selected') === 0) $(this).text('删除选中项');
+    });
+    // "Select operation..."
+    $('select option').filter(function(){ return $(this).text().trim() === 'Select operation...'; }).text('选择操作...');
+
+    // ===== 8. 分页文字 =====
+    $('p, span, div').each(function() {
+      var node = this;
+      // 仅处理叶子节点或浅层文本
+      if ($(node).children().length === 0) {
+        var txt = $(node).text();
+        if (txt.indexOf('Showing') !== -1 && txt.indexOf('to') !== -1 && txt.indexOf('of') !== -1) {
+          $(node).text(txt
+            .replace('Showing', '显示第')
+            .replace(' to ', ' 到 ')
+            .replace(' of ', '，共 ')
+            .replace('items', '条')
+          );
+        }
+      }
+    });
+
+    // ===== 9. 退出登录按钮 =====
+    $('a').filter(function() { return $(this).text().trim() === 'Logout'; }).text('退出登录');
+
+    // ===== 10. form label 翻译（编辑/新增表单） =====
+    var labelMap = {
+      'Username':          '用户名',
+      'Password':          '密码',
+      'Password Hash':     '密码（留空则不修改）',
+      'Email':             '邮箱',
+      'Role':              '角色',
+      'Status':            '状态',
+      'Recognitions':      '识别记录',
+      'Comments':          '评论',
+      'Feedbacks':         '反馈',
+      'Qa Histories':      '问答历史',
+      'Expert Application':'专家申请',
+      'Profile':           '用户资料',
+      'Name':              '名称',
+      'Family':            '科属',
+      'Color':             '颜色',
+      'Blooming Period':   '花期',
+      'Description':       '描述',
+      'Care Guide':        '养护指南',
+      'Flower Language':   '花语',
+      'Plant Type':        '类型',
+      'Tags':              '标签',
+      'Is Active':         '是否活跃',
+      'Is Corrected':      '已纠错',
+      'Image Url':         '图片地址',
+      'Plant Id':          '花卉ID',
+      'User Id':           '用户ID',
+      'Corrected Plant Id':'纠正花卉ID',
+      'Reply Content':     '回复内容',
+      'Processed At':      '处理时间',
+      'Proof Material':    '证明材料',
+      'Registration Date': '注册日期',
+      'Last Login At':     '上次登录',
+      'Last Login Ip':     '上次登录IP',
+      'Created At':        '创建时间',
+      'Updated At':        '更新时间',
+      'Flower Id':         '花卉ID',
+      'Comment Id':        '评论ID',
+      'Admin Id':          '管理员ID',
+      'Action':            '操作类型',
+      'Target Type':       '目标类型',
+      'Target Id':         '目标ID',
+      'Details':           '操作详情',
+      'Ip Address':        'IP地址',
+      'Code':              '验证码',
+      'Type':              '类型',
+      'Expires At':        '过期时间',
+      'Is Used':           '已使用',
+      'Question':          '提问内容',
+      'Answer':            '回答内容',
+      'Content':           '内容',
+    };
+    $('label.form-label').each(function() {
+      var txt = $(this).text().trim();
+      if (labelMap[txt]) $(this).text(labelMap[txt]);
+    });
+
+    // ===== 11. 登录页 =====
+    $('h2.card-title').each(function() {
+      var txt = $(this).text().trim();
+      if (txt.indexOf('Login to') === 0) $(this).text('登录 花世界后台管理');
+    });
+    $('button[type=submit]').each(function() {
+      if ($(this).text().trim() === 'Login') $(this).text('登录');
+    });
+
+    // ===== 12. 表单页面标题 "New 用户" → "添加新用户" =====
+    $('h3.card-title').each(function() {
+      var txt = $(this).text().trim();
+      if (txt.indexOf('New ') === 0) {
+        $(this).text('添加新' + txt.substring(4));
+      } else if (txt.indexOf('Edit ') === 0) {
+        $(this).text('编辑：' + txt.substring(5));
+      }
+    });
+
+    // ===== 13. Go Back 按钮 =====
+    $('a.btn').filter(function() { return $(this).text().trim() === 'Go Back'; }).text('← 返回列表');
+
+    // ===== 14. Filters 侧边栏 =====
+    $('div.card-header h3').filter(function() { return $(this).text().trim() === 'Filters'; }).text('筛选条件');
+    $('[placeholder="Apply Filter"]').attr('placeholder', '应用筛选');
+    $('button:contains("Apply Filter")').filter(function(){ return $(this).text().trim() === 'Apply Filter'; }).text('应用筛选');
+
+    // ===== 15. [Clear] 筛选清除 =====
+    $('a').filter(function() { return $(this).text().trim() === '[Clear]'; }).text('[清除]');
+
+    // ===== 16. 分页 prev/next =====
+    $('a.page-link').filter(function() { return $(this).text().trim() === 'prev'; }).text('上一页');
+    $('a.page-link').filter(function() { return $(this).text().trim() === 'next'; }).text('下一页');
+
+  });
+  </script>
+  {% block tail %}
+  {% endblock %}
+</body>
+
+</html>

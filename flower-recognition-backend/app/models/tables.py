@@ -19,14 +19,15 @@ class User(Base):
     last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     last_login_ip: Mapped[Optional[str]] = mapped_column(String(64))
     
-    # 个人资料（通过 profile 关联存储）
     profile: Mapped[Optional["UserProfile"]] = relationship(back_populates="user", uselist=False)
-
     recognitions: Mapped[List["RecognitionRecord"]] = relationship(back_populates="user", lazy="selectin")
     comments: Mapped[List["Comment"]] = relationship(back_populates="user")
     feedbacks: Mapped[List["Feedback"]] = relationship(back_populates="user")
     qa_histories: Mapped[List["QAHistory"]] = relationship(back_populates="user")
     expert_application: Mapped[Optional["ExpertApplication"]] = relationship(back_populates="user", uselist=False)
+
+    def __str__(self):
+        return self.username or f"用户#{self.id}"
 
 class Flower(Base):
     __tablename__ = "flowers"
@@ -50,6 +51,9 @@ class Flower(Base):
         foreign_keys="RecognitionRecord.plant_id"
     )
     comments: Mapped[List["Comment"]] = relationship(back_populates="flower")
+
+    def __str__(self):
+        return self.name or f"花卉#{self.id}"
 
 class RecognitionRecord(Base):
     __tablename__ = "recognition_records"
@@ -168,14 +172,14 @@ class AuditLog(Base):
     
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     admin_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
-    action: Mapped[str] = mapped_column(String(64), nullable=False) # e.g., "update_flower", "disable_user"
-    target_type: Mapped[str] = mapped_column(String(64), nullable=False) # e.g., "Flower", "User"
-    target_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    details: Mapped[Optional[str]] = mapped_column(Text) # JSON string of changes
+    action: Mapped[str] = mapped_column(String(64), nullable=False)
+    target_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    target_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    details: Mapped[Optional[str]] = mapped_column(Text)
     ip_address: Mapped[Optional[str]] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
-    admin: Mapped["User"] = relationship()
+    admin: Mapped["User"] = relationship(lazy="selectin")
 
 class FlowerVersion(Base):
     __tablename__ = "flower_versions"
