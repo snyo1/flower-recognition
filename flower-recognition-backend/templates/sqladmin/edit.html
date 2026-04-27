@@ -7,7 +7,7 @@
       <h3 class="card-title">编辑{{ model_view.name }}</h3>
     </div>
     <div class="card-body border-bottom py-3">
-      <form action="{{ model_view._build_url_for('admin:edit', request, obj) }}" method="POST"
+      <form id="edit-form" action="{{ model_view._build_url_for('admin:edit', request, obj) }}" method="POST"
         enctype="multipart/form-data">
         <div class="row">
           {% if error %}
@@ -17,28 +17,50 @@
         <fieldset class="form-fieldset">
           {{ render_form_fields(form, form_opts=form_opts) }}
         </fieldset>
-        <div class="row">
+        <div class="row mt-3">
           <div class="col-md-2">
             <a href="{{ url_for('admin:list', identity=model_view.identity) }}" class="btn">
               取消
             </a>
           </div>
-          <div class="col-md-6">
-            <div class="btn-group flex-wrap" data-toggle="buttons">
-              <input type="submit" name="save" value="保存" class="btn btn-primary">
-              <input type="submit" name="save" value="保存并继续编辑" class="btn">
-              {% if model_view.can_create %}
-              {% if model_view.save_as %}
-              <input type="submit" name="save" value="另存为新记录" class="btn">
-              {% else %}
-              <input type="submit" name="save" value="保存并新增" class="btn">
-              {% endif %}
-              {% endif %}
-            </div>
+          <div class="col-md-4">
+            <button type="button" id="btn-save" class="btn btn-primary">保存</button>
+            <span id="save-feedback" style="margin-left:12px;display:none;color:#2fb344;font-weight:500;">✓ 保存成功</span>
           </div>
         </div>
       </form>
     </div>
   </div>
 </div>
+{% endblock %}
+{% block tail %}
+<script>
+$(function() {
+  $('#btn-save').on('click', function() {
+    var $btn = $(this);
+    $btn.prop('disabled', true).text('保存中…');
+    var form = document.getElementById('edit-form');
+    var formData = new FormData(form);
+    formData.set('save', 'Save');
+    fetch(form.action, {
+      method: 'POST',
+      body: formData,
+      redirect: 'manual',
+      credentials: 'same-origin'
+    }).then(function(resp) {
+      $btn.prop('disabled', false).text('保存');
+      if (resp.ok || resp.status === 302 || resp.type === 'opaqueredirect') {
+        $('#save-feedback').fadeIn(200).delay(2000).fadeOut(400);
+      } else {
+        resp.text().then(function(t) {
+          alert('保存失败（' + resp.status + '），请检查表单内容。');
+        });
+      }
+    }).catch(function(err) {
+      $btn.prop('disabled', false).text('保存');
+      alert('网络错误，请重试。');
+    });
+  });
+});
+</script>
 {% endblock %}

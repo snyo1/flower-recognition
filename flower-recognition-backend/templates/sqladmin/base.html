@@ -35,9 +35,10 @@
   <script>
   $(function(){
 
-    // ===== 1. select option 枚举值翻译（仅对 <select> 的 option，不动 td） =====
-    // role 和 status 列表显示已由 Python column_formatters 处理，
-    // 这里只处理编辑表单中 <select> 下拉的枚举选项
+    // ===== 禁用搜索框的 keyup 自动搜索（main.js 会在输入1秒后自动触发，改为只点按钮才搜索）=====
+    $(document).off('keyup', '#search-input');
+
+    // ===== 1. select option 枚举值翻译 =====
     var enumOptionMap = {
       'active':     '正常',
       'disabled':   '已禁用',
@@ -63,7 +64,6 @@
           $(this).text(enumOptionMap[val]);
         }
       });
-      // select2 渲染后的已选中项气泡
       $('.select2-selection__rendered').each(function() {
         var txt = $(this).attr('title') || $(this).text().trim();
         if (enumOptionMap[txt] !== undefined) {
@@ -73,7 +73,6 @@
     }
     translateSelectOptions();
 
-    // select2 下拉打开时翻译浮层选项
     $(document).on('select2:open', function() {
       setTimeout(function() {
         $('.select2-results__option').each(function() {
@@ -85,103 +84,105 @@
       }, 80);
     });
 
-    // ===== 2. "添加新用户" / "添加新花卉" 按钮 =====
-    // sqladmin 生成的新增按钮文字为 "+ New 用户" / "+ New 花卉"
+    // ===== 2. "+ New XXX" 按钮中文化 =====
     $('a.btn').each(function() {
       var txt = $(this).text().trim();
-      // 匹配 "+ New XXX" 形式
       if (/^\+\s*New\s+/.test(txt)) {
         var name = txt.replace(/^\+\s*New\s+/, '').trim();
         $(this).html('<svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 5l0 14"/><path d="M5 12l14 0"/></svg> 添加新' + name);
       }
     });
 
-    // ===== 3. 删除确认弹窗中文化 =====
-    // sqladmin 使用 Bootstrap modal，拦截 confirm 弹窗
-    // 覆盖列表行内"Delete"按钮的 confirm 对话框
-    $(document).on('click', '[data-bs-toggle="modal"]', function() {
-      setTimeout(function() {
-        // 翻译弹窗标题
-        $('.modal-title').each(function() {
-          var t = $(this).text().trim();
-          if (t === 'Please confirm') $(this).text('请确认操作');
-        });
-        // 翻译弹窗正文
-        $('.modal-body p').each(function() {
-          var t = $(this).text().trim();
-          if (t.indexOf('Are you sure you want to delete') !== -1) {
-            $(this).text('确定要删除此记录吗？此操作不可撤销。');
-          }
-        });
-        // 翻译弹窗按钮
-        $('.modal-footer .btn-danger').each(function() {
-          if ($(this).text().trim() === 'Delete') $(this).text('确认删除');
-        });
-        $('.modal-footer .btn-secondary').each(function() {
-          var t = $(this).text().trim();
-          if (t === 'Cancel' || t === 'Close') $(this).text('取消');
-        });
-        // 翻译批量操作确认弹窗
-        $('.modal-body').each(function() {
-          var html = $(this).html();
-          if (html.indexOf('Are you sure') !== -1) {
-            $(this).html(html
-              .replace(/Are you sure you want to delete these \d+ items\?/g, '确定要删除选中的记录吗？此操作不可撤销。')
-              .replace(/Are you sure you want to delete this item\?/g, '确定要删除此记录吗？此操作不可撤销。')
-            );
-          }
-        });
-      }, 50);
+    // ===== 3. 删除确认弹窗正文中文化 =====
+    function translateDeleteModalText() {
+      var $txt = $('#modal-delete-text');
+      if (!$txt.length) return;
+      var t = $txt.text().trim();
+      if (t.indexOf('This will permanently delete') !== -1) {
+        var match = t.match(/This will permanently delete\s+(.+?)[\.\?]?\s*$/);
+        var target = match ? match[1].replace(/[\.\?]+$/, '').trim() : '';
+        $txt.text(target ? '此操作将永久删除「' + target + '」，无法撤销。' : '此操作将永久删除该记录，无法撤销。');
+      } else if (t.indexOf('Are you sure') !== -1) {
+        $txt.text(t
+          .replace(/Are you sure you want to delete these \d+ items\?/, '确定要删除选中的记录吗？此操作不可撤销。')
+          .replace(/Are you sure you want to delete this item\?/, '确定要删除此记录吗？此操作不可撤销。')
+          .replace(/Are you sure you want to delete[^?]*\?/, '确定要删除此记录吗？此操作不可撤销。')
+        );
+      }
+    }
+
+    $(document).on('show.bs.modal shown.bs.modal', '#modal-delete', function() {
+      setTimeout(translateDeleteModalText, 50);
+      setTimeout(translateDeleteModalText, 200);
     });
 
-    // ===== 4. 图标按钮 title 翻译（操作列的查看/编辑/删除） =====
+    // ===== 4. 图标按钮 title 翻译 =====
     var titleMap = { 'View': '查看详情', 'Edit': '编辑', 'Delete': '删除' };
     $('[title]').each(function() {
       var ti = $(this).attr('title');
       if (titleMap[ti]) $(this).attr('title', titleMap[ti]);
     });
 
-    // ===== 5. 搜索框 placeholder =====
-    $('input[placeholder="Search:"]').attr('placeholder', '搜索：');
+    // ===== 5. 搜索框 placeholder 翻译（保留字段名提示）=====
+    // SQLAdmin 生成格式：placeholder="Search: username, email"
+    // 翻译为：可搜索：username、email
+    $('input#search-input').each(function() {
+      var ph = $(this).attr('placeholder') || '';
+      if (ph.indexOf('Search:') === 0) {
+        var fields = ph.replace(/^Search:\s*/, '').trim();
+        $(this).attr('placeholder', '可搜索：' + fields);
+      }
+    });
     $('input[placeholder="Enter value"]').attr('placeholder', '请输入值');
-    $('[placeholder="Select operation..."]').attr('placeholder', '选择操作...');
 
-    // ===== 6. 导出按钮 =====
+    // ===== 6. 搜索 / 重置按钮 =====
+    $('#search-button').text('搜索');
+    $('#search-reset').attr('title', '清除搜索');
+
+    // ===== 7. 导出按钮 =====
     $('a:contains("Export"), button:contains("Export")').each(function() {
       if ($(this).text().trim() === 'Export') $(this).text('导出');
     });
 
-    // ===== 7. 批量操作下拉文字 =====
-    $('select option:contains("Actions")').each(function(){
-      if ($(this).text().trim() === 'Actions') $(this).text('批量操作');
+    // ===== 8. Actions 下拉按钮 & 批量操作选项 =====
+    $('button#dropdownMenuButton').each(function() {
+      var t = $(this).text().trim();
+      if (t === 'Actions' || t.indexOf('Actions') === 0) $(this).text('批量操作');
     });
-    $('select option:contains("Delete selected")').each(function(){
-      if ($(this).text().indexOf('Delete selected') === 0) $(this).text('删除选中项');
+    $('a#action-delete').each(function() {
+      if ($(this).text().indexOf('Delete selected') !== -1) $(this).text('删除选中项');
     });
-    // "Select operation..."
-    $('select option').filter(function(){ return $(this).text().trim() === 'Select operation...'; }).text('选择操作...');
 
-    // ===== 8. 分页文字 =====
-    $('p, span, div').each(function() {
-      var node = this;
-      // 仅处理叶子节点或浅层文本
-      if ($(node).children().length === 0) {
-        var txt = $(node).text();
-        if (txt.indexOf('Showing') !== -1 && txt.indexOf('to') !== -1 && txt.indexOf('of') !== -1) {
-          $(node).text(txt
-            .replace('Showing', '显示第')
-            .replace(' to ', ' 到 ')
-            .replace(' of ', '，共 ')
-            .replace('items', '条')
-          );
-        }
+    // ===== 9. 分页区域翻译 =====
+    $('p.m-0.text-muted').each(function() {
+      var html = $(this).html();
+      if (html.indexOf('Showing') !== -1) {
+        html = html
+          .replace('Showing ', '显示第 ')
+          .replace(/ to\s*\n?\s*<span>/, ' 到 <span>')
+          .replace(/<\/span> of <span>/, '</span>，共 <span>')
+          .replace(/<\/span> items/, '</span> 条');
+        $(this).html(html);
+      }
+    });
+    $('div.dropdown.text-muted').each(function() {
+      var html = $(this).html();
+      if (html.indexOf('Show') !== -1 && html.indexOf('/ Page') !== -1) {
+        html = html.replace(/\bShow\b/, '每页显示').replace(/\/ Page/g, ' 条');
+        $(this).html(html);
+      }
+    });
+    $('div.dropdown-menu a.dropdown-item').each(function() {
+      var t = $(this).text().trim();
+      if (/^\d+ \/ Page$/.test(t)) {
+        $(this).text(t.replace(' / Page', ' 条/页'));
       }
     });
 
-    // ===== 9. 退出登录按钮 =====
+    // ===== 10. 退出登录按钮（layout 模板已直接写中文，这里作兜底）=====
     $('a').filter(function() { return $(this).text().trim() === 'Logout'; }).text('退出登录');
 
-    // ===== 10. form label 翻译（编辑/新增表单） =====
+    // ===== 11. form label 翻译 =====
     var labelMap = {
       'Username':          '用户名',
       'Password':          '密码',
@@ -233,13 +234,14 @@
       'Question':          '提问内容',
       'Answer':            '回答内容',
       'Content':           '内容',
+      'Confidence':        '置信度',
     };
     $('label.form-label').each(function() {
       var txt = $(this).text().trim();
       if (labelMap[txt]) $(this).text(labelMap[txt]);
     });
 
-    // ===== 11. 登录页 =====
+    // ===== 12. 登录页 =====
     $('h2.card-title').each(function() {
       var txt = $(this).text().trim();
       if (txt.indexOf('Login to') === 0) $(this).text('登录 花世界后台管理');
@@ -248,7 +250,7 @@
       if ($(this).text().trim() === 'Login') $(this).text('登录');
     });
 
-    // ===== 12. 表单页面标题 "New 用户" → "添加新用户" =====
+    // ===== 13. 表单页面标题 =====
     $('h3.card-title').each(function() {
       var txt = $(this).text().trim();
       if (txt.indexOf('New ') === 0) {
@@ -258,20 +260,67 @@
       }
     });
 
-    // ===== 13. Go Back 按钮 =====
+    // ===== 14. Go Back 按钮 =====
     $('a.btn').filter(function() { return $(this).text().trim() === 'Go Back'; }).text('← 返回列表');
 
-    // ===== 14. Filters 侧边栏 =====
+    // ===== 15. Filters 侧边栏 =====
     $('div.card-header h3').filter(function() { return $(this).text().trim() === 'Filters'; }).text('筛选条件');
     $('[placeholder="Apply Filter"]').attr('placeholder', '应用筛选');
-    $('button:contains("Apply Filter")').filter(function(){ return $(this).text().trim() === 'Apply Filter'; }).text('应用筛选');
+    $('button').filter(function(){ return $(this).text().trim() === 'Apply Filter'; }).text('应用筛选');
 
-    // ===== 15. [Clear] 筛选清除 =====
+    // ===== 16. [Clear] 筛选清除 =====
     $('a').filter(function() { return $(this).text().trim() === '[Clear]'; }).text('[清除]');
 
-    // ===== 16. 分页 prev/next =====
-    $('a.page-link').filter(function() { return $(this).text().trim() === 'prev'; }).text('上一页');
-    $('a.page-link').filter(function() { return $(this).text().trim() === 'next'; }).text('下一页');
+    // ===== 17. 分页 prev/next =====
+    // SQLAdmin 生成结构：<a class="page-link"><i class="...chevron-left"></i>prev</a>
+    $('a.page-link').each(function() {
+      var $a = $(this);
+      // 只替换文本节点，不动 <i> 图标
+      $a.contents().filter(function() {
+        return this.nodeType === 3; // 文本节点
+      }).each(function() {
+        this.textContent = this.textContent
+          .replace(/\bprev\b/g, '上一页')
+          .replace(/\bnext\b/g, '下一页');
+      });
+    });
+
+    // ===== 18. 详情预览页 Edit / Delete 按钮 =====
+    $('a.btn, button.btn').each(function() {
+      var $el = $(this);
+      $el.contents().filter(function() {
+        return this.nodeType === 3;
+      }).each(function() {
+        var t = this.textContent.trim();
+        if (t === 'Edit') this.textContent = this.textContent.replace('Edit', '编辑');
+        if (t === 'Delete') this.textContent = this.textContent.replace('Delete', '删除');
+      });
+    });
+
+    // ===== 19. 详情预览页列标题翻译（th） =====
+    $('table th').each(function() {
+      var t = $(this).text().trim();
+      if (labelMap[t]) $(this).text(labelMap[t]);
+    });
+
+    // ===== 20. 详情页 td 枚举值翻译（仅翻译纯枚举值，跳过用户名等真实内容）=====
+    // 只在 detail 页（包含 .datagrid 或 table.table-vcenter）中翻译 td 内容
+    // 用户名列（.username）不在 enumOptionMap 中，不会被误翻译
+    // 但"user"这个角色值需要翻译，而用户名"user"不需要翻译
+    // 通过检查 td 的兄弟 th 是否为"角色"列来区分
+    $('table.table td').each(function() {
+      if ($(this).children().length > 0) return; // 跳过有子元素的（含 HTML 的）
+      var t = $(this).text().trim();
+      if (enumOptionMap[t] === undefined) return;
+      // 获取当前列的列号
+      var colIdx = $(this).index();
+      // 找同行的 th（通过 thead）
+      var $thead = $(this).closest('table').find('thead tr');
+      var thText = $thead.find('th').eq(colIdx).text().trim();
+      // 用户名列（列标题是"用户名"）跳过，防止用户名为 "user" 时被误翻译
+      if (thText === '用户名' || thText === 'Username') return;
+      $(this).text(enumOptionMap[t]);
+    });
 
   });
   </script>

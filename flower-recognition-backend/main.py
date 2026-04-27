@@ -95,7 +95,7 @@ class AdminAuth(AuthenticationBackend):
         if user.role != "admin":
             return False
 
-        request.session.update({"token": "admin_token", "user_id": user.id})
+        request.session.update({"token": "admin_token", "user_id": user.id, "username": user.username})
         return True
 
     async def logout(self, request: Request) -> bool:
@@ -365,7 +365,8 @@ class QAHistoryAdmin(AuditModelView, model=QAHistory):
         "user": "用户",
         "user_id": "用户ID",
     }
-    column_searchable_list = ["question"]
+    column_searchable_list = ["question", "user.username"]
+    column_sortable_list = ["id", "created_at"]
     can_create = False
     can_edit = False
     can_delete = True
@@ -414,6 +415,7 @@ class CommentAdmin(AuditModelView, model=Comment):
         "flower_id": "花卉ID",
     }
     column_searchable_list = ["content"]
+    column_sortable_list = ["id", "created_at"]
     column_filters = []
     can_create = False
     can_edit = True
