@@ -305,9 +305,7 @@
 
     // ===== 20. 详情页 td 枚举值翻译（仅翻译纯枚举值，跳过用户名等真实内容）=====
     // 只在 detail 页（包含 .datagrid 或 table.table-vcenter）中翻译 td 内容
-    // 用户名列（.username）不在 enumOptionMap 中，不会被误翻译
-    // 但"user"这个角色值需要翻译，而用户名"user"不需要翻译
-    // 通过检查 td 的兄弟 th 是否为"角色"列来区分
+    // 通过列标题跳过用户/管理员列，防止用户名或管理员名为 "user" / "admin" 时被误翻译
     $('table.table td').each(function() {
       if ($(this).children().length > 0) return; // 跳过有子元素的（含 HTML 的）
       var t = $(this).text().trim();
@@ -317,8 +315,8 @@
       // 找同行的 th（通过 thead）
       var $thead = $(this).closest('table').find('thead tr');
       var thText = $thead.find('th').eq(colIdx).text().trim();
-      // 用户名列（列标题是"用户名"）跳过，防止用户名为 "user" 时被误翻译
-      if (thText === '用户名' || thText === 'Username') return;
+      var skipEnumColumns = ['用户名', 'Username', '用户', 'User', '反馈用户', '管理员', 'Admin'];
+      if (skipEnumColumns.indexOf(thText) !== -1) return;
       $(this).text(enumOptionMap[t]);
     });
 

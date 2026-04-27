@@ -190,6 +190,17 @@ class UserAdmin(AuditModelView, model=User):
         "expert_application": "专家申请",
     }
     column_searchable_list = ["username", "email"]
+    column_details_list = [
+        "id",
+        "username",
+        "email",
+        "role",
+        "status",
+        "registration_date",
+        "last_login_at",
+        "last_login_ip",
+        "recognition_count",
+    ]
     column_filters = []
     name = "用户"
     name_plural = "用户管理"
@@ -247,6 +258,8 @@ class UserAdmin(AuditModelView, model=User):
         "role": lambda m, a: {"user": "普通用户", "expert": "专家", "admin": "管理员"}.get(m.role, m.role),
         "status": lambda m, a: {"active": "正常", "disabled": "已禁用"}.get(m.status, m.status),
     }
+
+    column_formatters_detail = column_formatters
 
 
 class FlowerAdmin(AuditModelView, model=Flower):
@@ -536,6 +549,11 @@ class AuditLogAdmin(ModelView, model=AuditLog):
             f'{(m.details[:120] + "...") if m.details and len(m.details) > 120 else (m.details or "-")}'
             f'</div>'
         ),
+    }
+
+    column_formatters_detail = {
+        "target_type": lambda m, a: AuditLogAdmin._module_names.get(m.target_type, m.target_type),
+        "admin_id": lambda m, a: (m.admin.username if m.admin else f"管理员#{m.admin_id}"),
     }
 
     def get_query(self):
