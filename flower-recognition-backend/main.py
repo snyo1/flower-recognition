@@ -13,7 +13,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy import select
 from app.api import flower, qa, knowledge, auth, user, favorites, comments, feedbacks, admin
 from app.services.db import engine, AsyncSessionFactory
-from app.models.tables import Base, User, Flower, RecognitionRecord, Comment, Feedback, QAHistory, AuditLog, FlowerVersion
+from app.models.tables import Base, User, Flower, RecognitionRecord, Comment, CommentReply, Feedback, QAHistory, AuditLog, FlowerVersion
 from app.core.security import verify_password, get_password_hash
 from app.services.storage import minio_service
 from markupsafe import Markup

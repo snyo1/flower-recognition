@@ -89,6 +89,7 @@ class Comment(Base):
     
     user: Mapped["User"] = relationship(back_populates="comments", lazy="selectin")
     flower: Mapped["Flower"] = relationship(back_populates="comments", lazy="selectin")
+    replies: Mapped[List["CommentReply"]] = relationship(back_populates="comment", lazy="selectin")
 
 class Feedback(Base):
     __tablename__ = "feedbacks"
@@ -144,6 +145,19 @@ class CommentLike(Base):
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False, index=True)
     comment_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("comments.id"), nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+class CommentReply(Base):
+    __tablename__ = "comment_replies"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    comment_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("comments.id"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    comment: Mapped["Comment"] = relationship(back_populates="replies", lazy="selectin")
+    user: Mapped["User"] = relationship(lazy="selectin")
+
 
 class QAHistory(Base):
     __tablename__ = "qa_history"

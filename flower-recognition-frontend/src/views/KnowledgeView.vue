@@ -137,115 +137,146 @@
       v-model="detailVisible"
       :title="selectedFlower?.name"
       width="800px"
+      class="detail-dialog"
     >
-      <div v-if="selectedFlower" class="flower-detail">
-        <div class="detail-image">
-          <el-icon :size="80"><Picture /></el-icon>
-        </div>
-        <div class="detail-info">
-          <h2 class="detail-name">{{ selectedFlower.name }}</h2>
-          <p class="detail-family">{{ selectedFlower.family }}</p>
-
-          <el-descriptions :column="2" border class="detail-descriptions">
-            <el-descriptions-item label="颜色特征">
-              {{ selectedFlower.color }}
-            </el-descriptions-item>
-            <el-descriptions-item label="花期">
-              {{ selectedFlower.bloomingPeriod }}
-            </el-descriptions-item>
-          </el-descriptions>
-
-          <el-divider content-position="left">特征描述</el-divider>
-          <p class="detail-description">{{ selectedFlower.description }}</p>
-
-          <el-divider content-position="left">养护方法</el-divider>
-          <p class="detail-care">{{ selectedFlower.careGuide }}</p>
-
-          <el-divider content-position="left">花语文化</el-divider>
-          <p class="detail-language">{{ selectedFlower.flowerLanguage }}</p>
-
-          <div class="detail-actions">
-            <el-button type="primary" @click="startQA(selectedFlower)">
-              <el-icon><ChatDotRound /></el-icon>
-              发起问答
-            </el-button>
-            <el-button 
-              :type="isFavoriteDetail ? 'warning' : ''" 
-              :loading="favoriteLoading" 
-              @click="toggleFavoriteDetail(selectedFlower!)"
-            >
-              <el-icon v-if="!isFavoriteDetail"><Star /></el-icon>
-              {{ isFavoriteDetail ? '已收藏' : '收藏' }}
-            </el-button>
-            <el-button type="success" @click="openCommentArea">评论</el-button>
-            <el-button type="warning" @click="openFeedbackDialog">反馈</el-button>
-            <el-button @click="detailVisible = false">关闭</el-button>
+      <div v-if="selectedFlower" class="flower-detail-scroll">
+        <div class="flower-detail">
+          <div class="detail-image">
+            <el-icon :size="80"><Picture /></el-icon>
           </div>
+          <div class="detail-info">
+            <h2 class="detail-name">{{ selectedFlower.name }}</h2>
+            <p class="detail-family">{{ selectedFlower.family }}</p>
 
-          <div v-if="commentAreaVisible" class="comments-section">
-            <el-divider content-position="left">评论</el-divider>
-            <div class="comment-input">
-              <el-input
-                v-model="newComment"
-                type="textarea"
-                :rows="3"
-                placeholder="发表你的看法（支持最多300字）"
-                maxlength="300"
-                show-word-limit
-              />
-              <div class="comment-actions">
-                <el-button type="primary" @click="submitComment" :loading="commentSubmitting">发布评论</el-button>
-                <el-button @click="commentAreaVisible = false">收起</el-button>
-              </div>
-            </div>
-            <el-empty v-if="comments.length === 0" description="暂无评论，来发表第一条吧" />
-            <div v-else class="comment-list">
-              <el-card
-                v-for="c in comments"
-                :key="c.id"
-                class="comment-item"
-                shadow="never"
+            <el-descriptions :column="2" border class="detail-descriptions">
+              <el-descriptions-item label="颜色特征">
+                {{ selectedFlower.color }}
+              </el-descriptions-item>
+              <el-descriptions-item label="花期">
+                {{ selectedFlower.bloomingPeriod }}
+              </el-descriptions-item>
+            </el-descriptions>
+
+            <el-divider content-position="left">特征描述</el-divider>
+            <p class="detail-description">{{ selectedFlower.description }}</p>
+
+            <el-divider content-position="left">养护方法</el-divider>
+            <p class="detail-care">{{ selectedFlower.careGuide }}</p>
+
+            <el-divider content-position="left">花语文化</el-divider>
+            <p class="detail-language">{{ selectedFlower.flowerLanguage }}</p>
+
+            <div class="detail-actions">
+              <el-button type="primary" @click="startQA(selectedFlower)">
+                <el-icon><ChatDotRound /></el-icon>
+                发起问答
+              </el-button>
+              <el-button 
+                :type="isFavoriteDetail ? 'warning' : ''" 
+                :loading="favoriteLoading" 
+                @click="toggleFavoriteDetail(selectedFlower!)"
               >
-                <div class="comment-content">{{ c.content }}</div>
-                <div class="comment-meta">
-                  <span class="comment-time">{{ formatTime(c.created_at) }}</span>
-                  <div class="comment-actions-inline">
-                    <el-button text type="primary" @click="toggleLike(c.id)">👍 {{ c.likes }}</el-button>
-                    <el-button
-                      v-if="canDeleteComment(c)"
-                      text
-                      type="danger"
-                      @click="removeComment(c.id)"
-                    >
-                      删除
-                    </el-button>
-                  </div>
+                <el-icon v-if="!isFavoriteDetail"><Star /></el-icon>
+                {{ isFavoriteDetail ? '已收藏' : '收藏' }}
+              </el-button>
+              <el-button @click="detailVisible = false">关闭</el-button>
+            </div>
+
+            <div v-if="commentAreaVisible" class="comments-section">
+              <el-divider content-position="left">评论</el-divider>
+              <div class="comment-input">
+                <el-input
+                  v-model="newComment"
+                  type="textarea"
+                  :rows="3"
+                  placeholder="发表你的看法（支持最多300字）"
+                  maxlength="300"
+                  show-word-limit
+                />
+                <div class="comment-actions">
+                  <el-button type="primary" @click="submitComment" :loading="commentSubmitting">发布评论</el-button>
                 </div>
-              </el-card>
+              </div>
+              <el-empty v-if="comments.length === 0" description="暂无评论，来发表第一条吧" />
+              <div v-else class="comment-list">
+                <el-card
+                  v-for="c in comments"
+                  :key="c.id"
+                  class="comment-item"
+                  shadow="never"
+                >
+                  <div class="comment-header">
+                    <span class="comment-username">{{ c.username || '匿名用户' }}</span>
+                    <span class="comment-time">{{ formatTime(c.created_at) }}</span>
+                  </div>
+                  <div class="comment-content">{{ c.content }}</div>
+                  <div class="comment-meta">
+                    <div class="comment-actions-inline">
+                      <el-button text type="primary" @click="toggleLike(c.id)">👍 {{ c.likes }}</el-button>
+                      <el-button text type="primary" @click="toggleReplyInput(c.id)">💬 回复{{ c.reply_count ? ` (${c.reply_count})` : '' }}</el-button>
+                      <el-button
+                        v-if="canDeleteComment(c)"
+                        text
+                        type="danger"
+                        @click="removeComment(c.id)"
+                      >
+                        删除
+                      </el-button>
+                    </div>
+                  </div>
+                  <!-- 回复输入区 -->
+                  <div v-if="replyingCommentId === c.id" class="reply-input-area">
+                    <el-input
+                      v-model="replyContent"
+                      type="textarea"
+                      :rows="2"
+                      placeholder="写下你的回复..."
+                      maxlength="200"
+                      show-word-limit
+                    />
+                    <div class="reply-input-actions">
+                      <el-button size="small" type="primary" @click="submitReply(c.id)" :loading="replySubmitting">发布回复</el-button>
+                      <el-button size="small" @click="replyingCommentId = null">取消</el-button>
+                    </div>
+                  </div>
+                  <!-- 回复列表（可展开/折叠） -->
+                  <div v-if="c.reply_count > 0" class="reply-section">
+                    <el-button
+                      text
+                      type="info"
+                      size="small"
+                      @click="toggleReplies(c.id)"
+                    >
+                      {{ expandedReplies[c.id] ? '收起回复' : `展开 ${c.reply_count} 条回复` }}
+                    </el-button>
+                    <div v-if="expandedReplies[c.id]" class="reply-list">
+                      <div
+                        v-for="r in repliesMap[c.id]?.items || []"
+                        :key="r.id"
+                        class="reply-item"
+                      >
+                        <div class="reply-header">
+                          <span class="reply-username">{{ r.username }}</span>
+                          <span class="reply-time">{{ formatTime(r.created_at) }}</span>
+                        </div>
+                        <div class="reply-content">{{ r.content }}</div>
+                      </div>
+                      <div v-if="repliesMap[c.id] && repliesMap[c.id].total > repliesMap[c.id].items.length" class="reply-load-more">
+                        <el-button text type="primary" size="small" @click="loadMoreReplies(c.id)" :loading="repliesLoading[c.id]">
+                          加载更多回复
+                        </el-button>
+                      </div>
+                    </div>
+                  </div>
+                </el-card>
+              </div>
             </div>
           </div>
         </div>
       </div>
     </el-dialog>
 
-    <el-dialog
-      v-model="feedbackDialogVisible"
-      title="提交反馈"
-      width="600px"
-    >
-      <el-input
-        v-model="feedbackContent"
-        type="textarea"
-        :rows="5"
-        placeholder="针对该花卉知识的建议或问题（最多500字）"
-        maxlength="500"
-        show-word-limit
-      />
-      <template #footer>
-        <el-button @click="feedbackDialogVisible = false">取消</el-button>
-        <el-button type="warning" @click="submitFeedback" :loading="feedbackSubmitting">提交</el-button>
-      </template>
-    </el-dialog>
+
   </div>
 </template>
 
@@ -285,20 +316,39 @@ const flowers = ref<Flower[]>([])
 interface CommentItem {
   id: number
   user_id: number
+  username: string
   flower_id: number
   content: string
   created_at: string
   likes: number
+  reply_count: number
+}
+
+interface ReplyItem {
+  id: number
+  user_id: number
+  username: string
+  content: string
+  created_at: string
+}
+
+interface RepliesData {
+  total: number
+  page: number
+  items: ReplyItem[]
 }
 const comments = ref<CommentItem[]>([])
 const newComment = ref('')
 const commentAreaVisible = ref(false)
 const commentSubmitting = ref(false)
 
-// 反馈相关
-const feedbackDialogVisible = ref(false)
-const feedbackContent = ref('')
-const feedbackSubmitting = ref(false)
+// 回复相关
+const replyingCommentId = ref<number | null>(null)
+const replyContent = ref('')
+const replySubmitting = ref(false)
+const expandedReplies = ref<Record<number, boolean>>({})
+const repliesMap = ref<Record<number, RepliesData>>({})
+const repliesLoading = ref<Record<number, boolean>>({})
 
 // 科属分类
 const familyCategories = ref(['蔷薇科', '菊科', '兰科', '百合科', '豆科', '仙人掌科'])
@@ -465,8 +515,11 @@ const viewDetail = (flower: Flower) => {
   selectedFlower.value = flower
   detailVisible.value = true
   commentAreaVisible.value = true
+  replyingCommentId.value = null
+  replyContent.value = ''
+  expandedReplies.value = {}
+  repliesMap.value = {}
   loadComments()
-  // 检查是否已收藏
   checkFavoriteStatus(flower.id)
 }
 
@@ -516,11 +569,6 @@ const toggleFavoriteDetail = (flower: Flower) => {
 const tokenHeader = () => {
   const token = localStorage.getItem('access_token')
   return token ? { Authorization: `Bearer ${token}` } : {}
-}
-
-const openCommentArea = () => {
-  commentAreaVisible.value = true
-  loadComments()
 }
 
 const loadComments = () => {
@@ -584,30 +632,75 @@ const formatTime = (iso: string) => {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
 }
 
-const openFeedbackDialog = () => {
-  feedbackDialogVisible.value = true
+const toggleReplyInput = (commentId: number) => {
+  if (replyingCommentId.value === commentId) {
+    replyingCommentId.value = null
+    replyContent.value = ''
+  } else {
+    replyingCommentId.value = commentId
+    replyContent.value = ''
+  }
 }
 
-const submitFeedback = () => {
-  if (!selectedFlower.value) return
-  if (!feedbackContent.value.trim()) {
-    ElMessage.warning('请输入反馈内容')
+const submitReply = (commentId: number) => {
+  if (!replyContent.value.trim()) {
+    ElMessage.warning('请输入回复内容')
     return
   }
-  feedbackSubmitting.value = true
+  replySubmitting.value = true
   axios.post(
-    `/api/feedbacks/add/${selectedFlower.value.id}`,
+    `/api/comments/${commentId}/reply`,
     null,
-    { params: { content: feedbackContent.value }, headers: tokenHeader() }
+    { params: { content: replyContent.value }, headers: tokenHeader() }
   ).then(() => {
-    ElMessage.success('反馈已提交')
-    feedbackDialogVisible.value = false
-    feedbackContent.value = ''
+    ElMessage.success('回复已发布')
+    replyContent.value = ''
+    replyingCommentId.value = null
+    loadComments()
+    if (expandedReplies.value[commentId]) {
+      loadReplies(commentId, 1)
+    }
   }).catch(err => {
-    ElMessage.error(err?.response?.data?.detail || '提交失败')
+    ElMessage.error(err?.response?.data?.detail || '回复失败')
   }).finally(() => {
-    feedbackSubmitting.value = false
+    replySubmitting.value = false
   })
+}
+
+const loadReplies = (commentId: number, page: number) => {
+  repliesLoading.value[commentId] = true
+  axios.get(`/api/comments/${commentId}/replies`, { params: { page, page_size: 5 } }).then(({ data }) => {
+    if (page === 1) {
+      repliesMap.value[commentId] = data
+    } else {
+      const existing = repliesMap.value[commentId]
+      if (existing) {
+        existing.items = [...existing.items, ...data.items]
+        existing.page = data.page
+        existing.total = data.total
+      }
+    }
+  }).catch(() => {
+    repliesMap.value[commentId] = { total: 0, page: 1, items: [] }
+  }).finally(() => {
+    repliesLoading.value[commentId] = false
+  })
+}
+
+const toggleReplies = (commentId: number) => {
+  if (expandedReplies.value[commentId]) {
+    expandedReplies.value[commentId] = false
+  } else {
+    expandedReplies.value[commentId] = true
+    loadReplies(commentId, 1)
+  }
+}
+
+const loadMoreReplies = (commentId: number) => {
+  const current = repliesMap.value[commentId]
+  if (current) {
+    loadReplies(commentId, current.page + 1)
+  }
 }
 </script>
 
@@ -958,11 +1051,97 @@ const submitFeedback = () => {
 .comment-item {
   padding: 8px 12px;
 }
+.comment-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.comment-username {
+  font-weight: 600;
+  font-size: 14px;
+  color: #409eff;
+}
+.comment-time {
+  font-size: 12px;
+  color: #999;
+}
+.comment-content {
+  font-size: 14px;
+  color: #333;
+  line-height: 1.6;
+  margin-bottom: 6px;
+}
 .comment-meta {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
   font-size: 12px;
   color: #666;
+}
+
+/* 回复相关 */
+.reply-input-area {
+  margin-top: 10px;
+  padding: 10px;
+  background: #f9f9f9;
+  border-radius: 8px;
+}
+.reply-input-actions {
+  margin-top: 6px;
+  display: flex;
+  gap: 6px;
+}
+.reply-section {
+  margin-top: 8px;
+}
+.reply-list {
+  margin-top: 6px;
+  padding-left: 16px;
+  border-left: 2px solid #e0e0e0;
+}
+.reply-item {
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+.reply-item:last-child {
+  border-bottom: none;
+}
+.reply-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.reply-username {
+  font-weight: 600;
+  font-size: 13px;
+  color: #67c23a;
+}
+.reply-time {
+  font-size: 12px;
+  color: #999;
+}
+.reply-content {
+  font-size: 13px;
+  color: #555;
+  line-height: 1.5;
+}
+.reply-load-more {
+  padding: 6px 0;
+  text-align: center;
+}
+
+/* 弹窗内容滚动限高 */
+.flower-detail-scroll {
+  max-height: 70vh;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+:deep(.detail-dialog .el-dialog__body) {
+  padding-top: 10px;
+  padding-bottom: 10px;
+  overflow: hidden;
 }
 </style>
