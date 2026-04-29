@@ -17,6 +17,7 @@
               class="upload-demo"
               drag
               multiple
+              :show-file-list="false"
               :auto-upload="false"
               :on-change="handleFileChange"
               :file-list="fileList"
@@ -30,11 +31,11 @@
             </el-upload>
           </div>
 
-          <div v-if="previewUrls.length > 0" class="preview-section">
-            <el-scrollbar max-height="300px">
+          <div v-if="fileList.length > 0" class="preview-section">
+            <el-scrollbar max-height="320px">
               <div class="preview-grid">
-                <div v-for="(url, index) in previewUrls" :key="index" class="preview-container">
-                  <el-image :src="url" fit="cover" class="preview-image-small" />
+                <div v-for="(file, index) in fileList" :key="file.uid" class="preview-container">
+                  <el-image :src="file.previewUrl" fit="cover" class="preview-image-small" />
                   <el-button
                     class="delete-btn-small"
                     type="danger"
@@ -56,11 +57,11 @@
               type="primary"
               class="btn-primary"
               :icon="Camera"
-              :disabled="previewUrls.length === 0"
+              :disabled="fileList.length === 0"
               @click="identifyFlower"
               :loading="identifying"
             >
-              {{ previewUrls.length > 1 ? '批量识别' : '开始识别' }}
+              {{ fileList.length > 1 ? '批量识别' : '开始识别' }}
             </el-button>
           </div>
 
@@ -72,7 +73,7 @@
               striped
               striped-flow
             />
-            <div class="progress-text">{{ uploadProgress < 100 ? '正在上传图片...' : '正在识别中，请稍候...' }}</div>
+            <div class="progress-text">{{ uploadProgress < 100 ? '正在上传图片...' : '正在识别中...' }}</div>
           </div>
         </el-card>
       </div>
@@ -97,10 +98,10 @@
                     <!-- 结果卡片左侧：图片 -->
                     <div class="result-image-box">
                       <el-image
-                        :src="res.imagePreview || previewUrls[idx]"
+                        :src="res.imagePreview || fileList[idx]?.previewUrl"
                         fit="cover"
                         class="result-image"
-                        :preview-src-list="[res.imagePreview || previewUrls[idx]]"
+                        :preview-src-list="[res.imagePreview || fileList[idx]?.previewUrl].filter(Boolean)"
                       />
                       <div class="confidence-tag" v-if="res.failed">
                         未能识别
@@ -178,7 +179,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   UploadFilled,
@@ -189,8 +190,7 @@ import {
   Star,
   Share,
   ChatDotRound,
-  Warning,
-  User
+  Warning
 } from '@element-plus/icons-vue'
 import type { UploadInstance, UploadProps } from 'element-plus'
 import { useRouter } from 'vue-router'
@@ -199,11 +199,15 @@ import { api } from '../api/config'
 
 const router = useRouter()
 const uploadRef = ref<UploadInstance>()
-const fileList = ref<any[]>([])
-const previewUrls = ref<string[]>([])
+
+interface UploadItem {
+  uid: number | string
+  raw: File
+  previewUrl: string
+}
+
+const fileList = ref<UploadItem[]>([])
 const identifying = ref(false)
-const activeCollapse = ref('')
-const isFavorite = ref(false)
 
 interface RecognitionResult {
   id?: number
@@ -222,29 +226,37 @@ interface RecognitionResult {
 
 const results = ref<RecognitionResult[]>([])
 
-const handleFileChange: UploadProps['onChange'] = (uploadFile, uploadFiles) => {
+const revokePreviewUrl = (url?: string) => {
+  if (url) {
+    URL.revokeObjectURL(url)
+  }
+}
+
+const handleFileChange: UploadProps['onChange'] = (uploadFile) => {
   if (uploadFile.raw) {
     const file = uploadFile.raw
 
-    // 验证文件类型
     const validTypes = ['image/jpeg', 'image/png', 'image/jpg']
     if (!validTypes.includes(file.type)) {
       ElMessage.error('请上传JPG/PNG格式的图片')
       return
     }
 
-    // 批量处理时，为了性能和稳定性，进行前端压缩
     compressImage(file).then(compressedFile => {
-      previewUrls.value.push(URL.createObjectURL(compressedFile))
-      // 替换原始文件为压缩后的文件，用于上传
-      const newUploadFile = { ...uploadFile, raw: compressedFile }
-      fileList.value.push(newUploadFile)
+      fileList.value.push({
+        uid: uploadFile.uid,
+        raw: compressedFile,
+        previewUrl: URL.createObjectURL(compressedFile)
+      })
       results.value = []
     }).catch(err => {
       console.error('图片压缩失败:', err)
-      // 降级使用原图
-      previewUrls.value.push(URL.createObjectURL(file))
-      fileList.value.push(uploadFile)
+      fileList.value.push({
+        uid: uploadFile.uid,
+        raw: file,
+        previewUrl: URL.createObjectURL(file)
+      })
+      results.value = []
     })
   }
 }
@@ -298,8 +310,11 @@ const compressImage = (file: File): Promise<File> => {
 }
 
 const removeFile = (index: number) => {
-  previewUrls.value.splice(index, 1)
+  const removedFile = fileList.value[index]
+  revokePreviewUrl(removedFile?.previewUrl)
   fileList.value.splice(index, 1)
+  results.value = []
+  uploadRef.value?.handleRemove?.(removedFile as never)
 }
 
 const uploadProgress = ref(0)
@@ -351,7 +366,7 @@ const identifyFlower = async () => {
   } catch (error) {
     console.error('识别失败:', error)
     // 识别失败时为每张图片生成"未识别"占位结果，而不是直接报错
-    const failedResults: RecognitionResult[] = previewUrls.value.map((url) => ({
+    const failedResults: RecognitionResult[] = fileList.value.map((file) => ({
       name: '未识别',
       family: '-',
       color: '-',
@@ -360,7 +375,7 @@ const identifyFlower = async () => {
       careGuide: '-',
       flowerLanguage: '-',
       confidence: 0,
-      imagePreview: url,
+      imagePreview: file.previewUrl,
       isFavorite: false,
       failed: true,
     }))
@@ -372,11 +387,15 @@ const identifyFlower = async () => {
 }
 
 const resetUpload = () => {
-  previewUrls.value = []
+  fileList.value.forEach(file => revokePreviewUrl(file.previewUrl))
   fileList.value = []
   results.value = []
   uploadRef.value?.clearFiles()
 }
+
+onBeforeUnmount(() => {
+  fileList.value.forEach(file => revokePreviewUrl(file.previewUrl))
+})
 
 const goToQA = (res: RecognitionResult) => {
   router.push({
@@ -483,6 +502,7 @@ const triggerFileUpload = () => {
   flex: 0 0 400px;
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
 .layout-right {
@@ -544,6 +564,7 @@ const triggerFileUpload = () => {
 .preview-section {
   margin-top: 15px;
   flex: 1;
+  min-height: 0;
 }
 
 .preview-grid {
@@ -573,6 +594,12 @@ const triggerFileUpload = () => {
   margin-top: 15px;
   display: flex;
   gap: 10px;
+  flex-shrink: 0;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  padding: 12px 0 0;
+  background: linear-gradient(180deg, rgba(255,255,255,0), #fff 18px, #fff 100%);
 }
 
 .btn-primary, .btn-secondary {

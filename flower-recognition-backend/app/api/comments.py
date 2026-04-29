@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete, func
+from sqlalchemy import select, delete, func, desc
 from ..services.db import get_db
 from ..models.tables import Comment, CommentLike, CommentReply, Flower, User
 from .user import get_current_user
@@ -91,7 +91,7 @@ async def list_replies(
     result = await db.execute(
         select(CommentReply)
         .filter(CommentReply.comment_id == comment_id)
-        .order_by(CommentReply.created_at.asc())
+        .order_by(desc(CommentReply.created_at))
         .offset((page - 1) * page_size)
         .limit(page_size)
     )

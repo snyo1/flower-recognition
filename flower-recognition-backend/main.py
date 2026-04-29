@@ -160,6 +160,7 @@ class AuditModelView(ModelView):
 
 
 class UserAdmin(AuditModelView, model=User):
+    column_default_sort = [("registration_date", True)]
     column_list = [
         "id",
         "username",
@@ -263,6 +264,7 @@ class UserAdmin(AuditModelView, model=User):
 
 
 class FlowerAdmin(AuditModelView, model=Flower):
+    column_default_sort = [("created_at", True)]
     column_list = [
         "id",
         "name",
@@ -312,6 +314,7 @@ class FlowerAdmin(AuditModelView, model=Flower):
 
 
 class RecognitionAdmin(AuditModelView, model=RecognitionRecord):
+    column_default_sort = [("created_at", True)]
     column_list = [
         "id",
         "user_name",
@@ -366,6 +369,7 @@ class RecognitionAdmin(AuditModelView, model=RecognitionRecord):
 
 
 class QAHistoryAdmin(AuditModelView, model=QAHistory):
+    column_default_sort = [("created_at", True)]
     column_list = ["id", "user_name", "question_preview", "answer_preview", "created_at"]
     column_labels = {
         "id": "ID",
@@ -413,6 +417,7 @@ class QAHistoryAdmin(AuditModelView, model=QAHistory):
         return super().get_query().options(selectinload(QAHistory.user))
 
 class CommentAdmin(AuditModelView, model=Comment):
+    column_default_sort = [("created_at", True)]
     column_list = ["id", "user_name", "flower_name", "content_preview", "status", "created_at"]
     column_labels = {
         "id": "ID",
@@ -462,6 +467,7 @@ class CommentAdmin(AuditModelView, model=Comment):
         )
 
 class FeedbackAdmin(AuditModelView, model=Feedback):
+    column_default_sort = [("created_at", True)]
     column_list = ["id", "user_name", "content_preview", "status", "created_at"]
     column_labels = {
         "id": "ID",
@@ -508,6 +514,7 @@ class FeedbackAdmin(AuditModelView, model=Feedback):
         return super().get_query().options(selectinload(Feedback.user))
 
 class AuditLogAdmin(ModelView, model=AuditLog):
+    column_default_sort = [("created_at", True)]
     # 只使用真实模型字段，不用虚拟列，避免 sqladmin 查询报错
     column_list = ["id", "admin_id", "action", "target_type", "target_id", "details", "ip_address", "created_at"]
     column_labels = {

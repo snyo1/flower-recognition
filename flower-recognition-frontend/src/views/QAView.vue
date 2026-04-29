@@ -88,6 +88,26 @@ const renderMarkdown = (content: string) => {
   return marked.parse(content) as string
 }
 
+const decorateAnswer = (content: string) => {
+  if (!content) return ''
+  const normalized = content.trim()
+  if (/^#|^- |^\d+\./m.test(normalized)) {
+    return normalized
+  }
+
+  const lines = normalized
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+
+  if (lines.length <= 1) {
+    return `### 花卉建议\n\n${normalized}`
+  }
+
+  const [summary, ...rest] = lines
+  return `### 花卉建议\n\n${summary}\n\n${rest.map(line => `- ${line.replace(/^\d+[、.\s]*/, '')}`).join('\n')}`
+}
+
 const DEFAULT_ANSWER = '抱歉，我暂时无法回答您的问题。您可以尝试询问花卉的养护方法、花期、花语等相关知识，或稍后再试。'
 
 const route = useRoute()
@@ -112,7 +132,6 @@ const quickQuestions = ref([
   '如何施肥？'
 ])
 
-// 获取当前用户ID用于隔离存储
 const getCurrentUserId = (): string => {
   const token = localStorage.getItem('access_token')
   if (!token) return ''
@@ -165,7 +184,6 @@ const sendMessage = async () => {
   const currentFlower = route.query.flower as string || ''
   let assistantAnswer = ''
 
-  // 最多重试2次
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const recentHistory = messages.value.slice(-6).map(msg => ({
@@ -183,12 +201,12 @@ const sendMessage = async () => {
         timeout: 20000
       })
 
-      assistantAnswer = response.data.answer || DEFAULT_ANSWER
+      assistantAnswer = decorateAnswer(response.data.answer || DEFAULT_ANSWER)
       break
     } catch (error) {
       console.error(`问答第${attempt + 1}次尝试失败:`, error)
       if (attempt === 1) {
-        assistantAnswer = DEFAULT_ANSWER
+        assistantAnswer = decorateAnswer(DEFAULT_ANSWER)
       } else {
         await new Promise(r => setTimeout(r, 1000))
       }
@@ -208,7 +226,7 @@ const sendMessage = async () => {
 
 const saveQARecord = (flower: string, question: string, answer: string) => {
   const userId = getCurrentUserId()
-  if (!userId) return // 未登录不保存到localStorage（依赖后端）
+  if (!userId) return
   const key = `qaRecords_${userId}`
   const qaRecords = JSON.parse(localStorage.getItem(key) || '[]')
   const record = { id: Date.now(), flower, question, answer, timestamp: Date.now() }
@@ -234,7 +252,6 @@ const askQuickQuestion = (question: string) => {
 
 const loadHistory = () => {
   const token = localStorage.getItem('access_token')
-  // 未登录：显示空记录，不加载localStorage全局历史
   if (!token) {
     messages.value = []
     return
@@ -248,7 +265,7 @@ const loadHistory = () => {
       const hist: Message[] = []
       for (const p of pairs) {
         hist.push({ role: 'user', content: p.question, timestamp: Date.parse(p.created_at) })
-        hist.push({ role: 'assistant', content: p.answer || '', timestamp: Date.parse(p.created_at) })
+        hist.push({ role: 'assistant', content: decorateAnswer(p.answer || ''), timestamp: Date.parse(p.created_at) })
       }
       messages.value = hist
     } else {
@@ -360,9 +377,10 @@ onActivated(() => {
 }
 
 .message.assistant .message-bubble {
-  background-color: #fff;
+  background: linear-gradient(180deg, #ffffff 0%, #f9fff8 100%);
   color: #333;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  box-shadow: 0 6px 18px rgba(76, 175, 80, 0.08);
+  border: 1px solid rgba(76, 175, 80, 0.12);
 }
 
 .message-bubble.loading {
@@ -374,7 +392,7 @@ onActivated(() => {
 
 .message-content {
   font-size: 14px;
-  line-height: 1.6;
+  line-height: 1.7;
   margin-bottom: 4px;
   white-space: normal;
   word-break: break-word;
@@ -382,18 +400,38 @@ onActivated(() => {
 
 .message-content.user-text { white-space: pre-wrap; }
 
-.message-content :deep(p) { margin: 0 0 6px 0; }
+.message-content :deep(p) { margin: 0 0 8px 0; }
 .message-content :deep(p:last-child) { margin-bottom: 0; }
-.message-content :deep(ul), .message-content :deep(ol) { margin: 4px 0; padding-left: 20px; }
-.message-content :deep(li) { margin-bottom: 2px; }
+.message-content :deep(ul), .message-content :deep(ol) { margin: 6px 0; padding-left: 20px; }
+.message-content :deep(li) { margin-bottom: 4px; }
 .message-content :deep(h1), .message-content :deep(h2), .message-content :deep(h3) {
-  font-size: 15px; font-weight: 600; margin: 6px 0 4px 0;
+  font-size: 15px;
+  font-weight: 700;
+  margin: 8px 0 6px 0;
+  color: #2e7d32;
+}
+.message-content :deep(strong) {
+  color: #1b5e20;
+}
+.message-content :deep(blockquote) {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-left: 3px solid #81c784;
+  background: rgba(129, 199, 132, 0.08);
+  border-radius: 6px;
 }
 .message-content :deep(code) {
-  background: rgba(0,0,0,0.06); padding: 1px 4px; border-radius: 3px; font-size: 13px;
+  background: rgba(0,0,0,0.06);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 13px;
 }
 .message-content :deep(pre) {
-  background: rgba(0,0,0,0.06); padding: 8px; border-radius: 4px; overflow-x: auto; font-size: 13px;
+  background: rgba(0,0,0,0.06);
+  padding: 8px;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 13px;
 }
 
 .message-time {

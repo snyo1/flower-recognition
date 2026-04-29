@@ -160,12 +160,10 @@ async def batch_identify_flowers(
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(get_current_user_optional),
 ):
-    results = []
-    for file in files:
-        if not file.content_type.startswith("image/"):
-            continue
-        result = await _process_single_image(file, db, current_user)
-        results.append(result)
+    valid_files = [file for file in files if file.content_type.startswith("image/")]
+    results = await asyncio.gather(
+        *[_process_single_image(file, db, current_user) for file in valid_files]
+    )
     try:
         await db.commit()
     except Exception as e:
